@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    tools:context=".MainActivity">
+
+    <!-- 摄像头预览 - 全屏 -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/viewFinder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- 顶部状态栏 - 浮动 -->
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="模型加载中..."
+        android:textColor="#00FF00"
+        android:textSize="11sp"
+        android:padding="4dp"
+        android:paddingStart="8dp"
+        android:gravity="start"
+        android:background="#66000000"
+        android:layout_gravity="top" />
+
+    <!-- 浮动设置按钮 - 右下角 -->
+    <ImageButton
+        android:id="@+id/btnSettings"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="12dp"
+        android:src="@android:drawable/ic_menu_manage"
+        android:background="#88000000"
+        android:contentDescription="设置"
+        android:scaleType="centerInside"
+        android:padding="8dp" />
+
+    <!-- 浮动摄像头开关按钮 - 左下角 -->
+    <ImageButton
+        android:id="@+id/btnCamera"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="bottom|start"
+        android:layout_margin="12dp"
+        android:src="@android:drawable/ic_menu_camera"
+        android:background="#88000000"
+        android:contentDescription="摄像头"
+        android:scaleType="centerInside"
+        android:padding="8dp" />
+
+    <!-- 浮动切换摄像头按钮 - 左下角偏右 -->
+    <ImageButton
+        android:id="@+id/btnSwitchCamera"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="64dp"
+        android:layout_marginBottom="12dp"
+        android:src="@android:drawable/ic_menu_rotate"
+        android:background="#88000000"
+        android:contentDescription="切换摄像头"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:visibility="gone" />
+
+    <!-- 二级菜单面板 - 从底部滑出 -->
+    <LinearLayout
+        android:id="@+id/settingsPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="#DD222222"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <!-- 标题栏 + 关闭按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="推流配置"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btnClosePanel"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@android:drawable/ic_menu_revert"
+                android:background="#00000000"
+                android:contentDescription="关闭"
+                android:scaleType="centerInside"
+                android:padding="4dp" />
+        </LinearLayout>
+
+        <!-- OSC 地址行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="OSC 地址"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp"
+                android:minWidth="64dp" />
+
+            <EditText
+                android:id="@+id/etOscHost"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="2"
+                android:text="127.0.0.1"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:background="#333333"
+                android:padding="6dp"
+                android:inputType="textUri"
+                android:singleLine="true"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="端口"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp"
+                android:layout_marginEnd="4dp" />
+
+            <EditText
+                android:id="@+id/etOscPort"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="9000"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:background="#333333"
+                android:padding="6dp"
+                android:inputType="number"
+                android:singleLine="true" />
+        </LinearLayout>
+
+        <!-- VMC 端口行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="VMC 端口"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp"
+                android:minWidth="64dp" />
+
+            <EditText
+                android:id="@+id/etVmcPort"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="39539"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:background="#333333"
+                android:padding="6dp"
+                android:inputType="number"
+                android:singleLine="true" />
+        </LinearLayout>
+
+        <!-- 操作按钮行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnStartStop"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:text="启动推流"
+                android:textSize="13sp"
+                android:layout_marginEnd="6dp" />
+
+            <Button
+                android:id="@+id/btnCalibrate"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:text="校准"
+                android:textSize="13sp"
+                android:layout_marginStart="6dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</FrameLayout>

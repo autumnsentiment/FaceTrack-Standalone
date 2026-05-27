@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 简单的人脸图标前景 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30 C42,30 32,40 32,52 C32,64 42,74 54,74 C66,74 76,64 76,52 C76,40 66,30 54,30 Z M46,48 C44.3,48 43,46.7 43,45 C43,43.3 44.3,42 46,42 C47.7,42 49,43.3 49,45 C49,46.7 47.7,48 46,48 Z M62,48 C60.3,48 59,46.7 59,45 C59,43.3 60.3,42 62,42 C63.7,42 65,43.3 65,45 C65,46.7 63.7,48 62,48 Z M54,62 C50,62 47,60 46,58 L48,57 C48.5,58.5 50.5,60 54,60 C57.5,60 59.5,58.5 60,57 L62,58 C61,60 58,62 54,62 Z"/>
+</vector>

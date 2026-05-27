@@ -1,0 +1,29 @@
+# Android 构建输出
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/.idea/
+android/local.properties
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# APK (通过 Release 分发)
+*.apk
+
+# 大文件 - 可通过 SDK Manager 重新下载
+android/cmdline-tools/
+android/gradle/wrapper/gradle-wrapper.jar
+FaceTrack-Android-v1.1.zip
+face_landmarker.task
