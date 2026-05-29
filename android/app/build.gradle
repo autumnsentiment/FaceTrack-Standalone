@@ -13,8 +13,8 @@ android {
         applicationId "com.facetrack.standalone"
         minSdk 26
         targetSdk 35
-        versionCode 2
-        versionName "1.1-snapdragon8elite-dimensity9400"
+        versionCode 3
+        versionName "1.2-universal-arm64"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
