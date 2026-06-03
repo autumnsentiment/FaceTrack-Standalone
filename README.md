@@ -75,6 +75,42 @@ Get the latest APK from [Releases](../../releases).
 
 ---
 
+## Known Issues | 已知问题
+
+### Eye Tracking Only Drives Left Eye | 眼部追踪仅驱动左眼
+
+**Symptom | 现象**: When using eye tracking with VRChat avatars, only the left eye moves while the right eye stays static.
+
+**现象**: 使用眼部追踪推流至 VRChat 模型时，仅左眼运动，右眼保持静止。
+
+**Root Cause | 根因**: Multiple issues in the eye tracking parameter pipeline:
+
+1. **Missing merged parameters**: VRChat avatars typically bind to `EyesX`/`EyesY` (combined left+right), but older versions only sent `EyeLeftX`/`EyeRightX` separately
+2. **Sign convention mismatch**: `EyeLeftX`/`EyeRightX` calculation was reversed vs. VRCFT standard (positive = look right, negative = look left)
+3. **OSC address format**: Parameters were sent with `ft/f/` binary encoding prefix which VRChat doesn't recognize
+
+**根因**: 眼部追踪参数管道存在多个问题：
+
+1. **缺少合并参数**: VRChat 模型通常绑定 `EyesX`/`EyesY`（左右眼合并值），但旧版本仅分别发送 `EyeLeftX`/`EyeRightX`
+2. **符号约定不匹配**: `EyeLeftX`/`EyeRightX` 计算与 VRCFT 标准相反（正值=右看，负值=左看）
+3. **OSC 地址格式**: 参数使用 `ft/f/` 二进制编码前缀发送，VRChat 无法识别
+
+**Fix (v1.3.0) | 修复**: This issue is fixed in v1.3.0. If you still experience it:
+
+- Ensure you're using **v1.3.0+**
+- Try enabling **Eye Sync** (right eye copies left eye data) in settings
+- Try enabling **X/Y Invert** if gaze direction is reversed
+- Check your avatar's eye parameter bindings (should use `EyesX`/`EyesY` or `EyeLookLeftRight`/`EyeLookUpDown`)
+
+**修复 (v1.3.0)**: 此问题已在 v1.3.0 修复。如仍遇到此问题：
+
+- 确保使用 **v1.3.0+** 版本
+- 尝试在设置中开启**眼部同步**（右眼复制左眼数据）
+- 如果视线方向相反，尝试开启**X/Y 轴反转**
+- 检查模型的眼睛参数绑定（应使用 `EyesX`/`EyesY` 或 `EyeLookLeftRight`/`EyeLookUpDown`）
+
+---
+
 ## Changelog | 更新日志
 
 ### v1.3.0 - Eye Tracking Fix & Calibration System
