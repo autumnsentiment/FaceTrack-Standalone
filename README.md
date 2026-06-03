@@ -77,6 +77,44 @@ Get the latest APK from [Releases](../../releases).
 
 ## Changelog | 更新日志
 
+### v1.3.0 - Eye Tracking Fix & Calibration System
+
+**Core Fix: Eye Tracking Only Drove Left Eye**
+
+| Category | v1.2 | v1.3 |
+|----------|------|------|
+| Eye Tracking | Only left eye moved | **Both eyes move** |
+| EyeLeftX/EyeRightX | Sign convention reversed | **Aligned with VRCFT standard** |
+| EyesX/EyesY | Not sent by default | **Always sent** |
+| OSC Address | `ft/f/` binary prefix | **Direct parameter address** |
+| Eye Calibration | No | **Dedicated calibration page** |
+| Eye Sync | No | **Right eye copies left eye data** |
+| Eye Invert | No | **X/Y axis inversion switches** |
+| Mirror Flip | Preview only | **Inference frame mirrored** |
+| Mouth Calibration | In secondary menu | **Dedicated calibration page** |
+| Secondary Menu | Not scrollable | **Scrollable layout** |
+
+**Key Changes:**
+
+- **Eye Sign Convention Fix**: Corrected `EyeLeftX` and `EyeRightX` calculation to match VRCFT standard (positive = look right, negative = look left)
+- **Always Send EyesX/EyesY**: Merged eye gaze parameters are now always sent, ensuring VRChat avatars with combined eye parameters work correctly
+- **OSC Address Format**: Changed from `ft/f/` binary encoding prefix to direct parameter addresses (`/avatar/parameters/v2/EyesX`)
+- **Eye Parameter Aliases**: Added VRChat-compatible aliases (EyeLookLeftRight, EyeLookUpDown, LeftEyeX, RightEyeX, etc.)
+- **Calibration System**: Dedicated calibration page with eye centering and mouth open/close calibration
+- **Eye Synchronization**: Option to copy left eye data to right eye
+- **Eye Inversion**: X/Y axis inversion switches for reversed gaze direction
+- **Mirror Flip**: Camera frame is now mirrored before inference (not just preview)
+- **Scrollable Menu**: Secondary menu now supports scrolling for smaller screens
+
+**Files Changed:**
+- `Helpers.kt` - Eye sign convention, always send EyesX/EyesY, eye sync, eye invert, mirror flip
+- `FaceVMCStreamer.kt` - OSC address format, eye parameter aliases, VMC eye mappings
+- `MainActivity.kt` - Calibration page UI, new switches, scrollable layout
+- `activity_main.xml` - Calibration page layout, ScrollView, new controls
+- `face_landmark.py` - Python eye sign convention, _MERGE_PARAMS fix
+- `streamers/face_vmc.py` - Python VMC eye mappings
+- `main.py` - Python configuration updates
+
 ### v1.2.0 - Universal ARM64 Support
 
 | Category | v1.0 | v1.2 |

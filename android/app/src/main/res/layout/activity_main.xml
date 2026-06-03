@@ -69,7 +69,21 @@
         android:padding="8dp"
         android:visibility="gone" />
 
-    <!-- 二级菜单面板 - 从底部滑出 -->
+    <!-- 浮动校准按钮 - 右下角偏左 -->
+    <ImageButton
+        android:id="@+id/btnOpenCalibration"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="64dp"
+        android:layout_marginBottom="12dp"
+        android:src="@android:drawable/ic_menu_compass"
+        android:background="#88000000"
+        android:contentDescription="校准"
+        android:scaleType="centerInside"
+        android:padding="8dp" />
+
+    <!-- 二级菜单面板 - 推流配置 (不含校准) -->
     <LinearLayout
         android:id="@+id/settingsPanel"
         android:layout_width="match_parent"
@@ -202,7 +216,7 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="10dp">
+            android:layout_marginBottom="6dp">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -226,31 +240,394 @@
                 android:singleLine="true" />
         </LinearLayout>
 
-        <!-- 操作按钮行 -->
+        <!-- 眼部灵敏度行 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="眼部灵敏度"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp"
+                android:minWidth="64dp" />
+
+            <SeekBar
+                android:id="@+id/seekBarEyeSensitivity"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:max="30"
+                android:progress="10"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp" />
+
+            <TextView
+                android:id="@+id/tvEyeSensitivity"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1.0"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:minWidth="32dp"
+                android:gravity="center" />
+        </LinearLayout>
+
+        <!-- 嘴部灵敏度行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="嘴部灵敏度"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp"
+                android:minWidth="64dp" />
+
+            <SeekBar
+                android:id="@+id/seekBarMouthSensitivity"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:max="30"
+                android:progress="10"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp" />
+
+            <TextView
+                android:id="@+id/tvMouthSensitivity"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1.0"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:minWidth="32dp"
+                android:gravity="center" />
+        </LinearLayout>
+
+        <!-- 镜像开关行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="画面镜像"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp"
+                android:minWidth="64dp" />
+
+            <Switch
+                android:id="@+id/switchMirror"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="镜像翻转"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- 启动推流按钮 -->
+        <Button
+            android:id="@+id/btnStartStop"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:text="启动推流"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+
+    <!-- 校准面板 - 全屏覆盖 -->
+    <LinearLayout
+        android:id="@+id/calibrationPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="#CC222222"
+        android:visibility="gone">
+
+        <!-- 标题栏 (固定不滚动) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="校准"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btnCloseCalibration"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@android:drawable/ic_menu_revert"
+                android:background="#00000000"
+                android:contentDescription="返回"
+                android:scaleType="centerInside"
+                android:padding="4dp" />
+        </LinearLayout>
+
+        <!-- 可滚动内容区 -->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+        <!-- 校准状态显示 -->
+        <TextView
+            android:id="@+id/tvCalibStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="请先开启摄像头并检测到面部"
+            android:textColor="#AAAAAA"
+            android:textSize="12sp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 眼部校准区 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="眼部校准"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="正视前方时点击「瞳孔居中校准」，将当前瞳孔位置设为视线中心"
+            android:textColor="#AAAAAA"
+            android:textSize="11sp"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
 
             <Button
-                android:id="@+id/btnStartStop"
+                android:id="@+id/btnCalibratePupil"
                 android:layout_width="0dp"
                 android:layout_height="40dp"
                 android:layout_weight="1"
-                android:text="启动推流"
+                android:text="瞳孔居中校准"
                 android:textSize="13sp"
                 android:layout_marginEnd="6dp" />
 
             <Button
-                android:id="@+id/btnCalibrate"
+                android:id="@+id/btnResetPupilCalib"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="重置"
+                android:textSize="12sp"
+                android:minWidth="64dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvPupilCalibInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="状态: 未校准"
+            android:textColor="#FFAA00"
+            android:textSize="11sp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 眼部取负开关 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <Switch
+                android:id="@+id/switchInvertEyeX"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="X轴取负"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+
+            <Switch
+                android:id="@+id/switchInvertEyeY"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="Y轴取负"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="开启后眼部视线数据取负值推流，用于修正视线方向相反问题"
+            android:textColor="#AAAAAA"
+            android:textSize="10sp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 双眼同步开关 -->
+        <Switch
+            android:id="@+id/switchSyncEyes"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:text="双眼同步"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:layout_marginBottom="2dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="开启后右眼数据复制左眼，解决模型仅左眼运动问题"
+            android:textColor="#AAAAAA"
+            android:textSize="10sp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 合并眼部参数开关 -->
+        <Switch
+            android:id="@+id/switchSendMergedEyes"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:text="发送合并眼部参数"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:layout_marginBottom="2dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="发送 EyesX/EyesY 合并值（部分模型合并值仅驱动左眼，默认关闭）"
+            android:textColor="#AAAAAA"
+            android:textSize="10sp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 嘴部校准区 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="嘴部校准"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="1. 闭嘴时点击「闭合校准」\n2. 最大张嘴时点击「最大值校准」"
+            android:textColor="#AAAAAA"
+            android:textSize="11sp"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <Button
+                android:id="@+id/btnMouthClosed"
                 android:layout_width="0dp"
                 android:layout_height="40dp"
                 android:layout_weight="1"
-                android:text="校准"
+                android:text="闭合校准"
+                android:textSize="13sp"
+                android:layout_marginEnd="6dp" />
+
+            <Button
+                android:id="@+id/btnMouthMaxOpen"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:text="最大值校准"
                 android:textSize="13sp"
                 android:layout_marginStart="6dp" />
         </LinearLayout>
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <Button
+                android:id="@+id/btnResetMouthCalib"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="重置嘴部校准"
+                android:textSize="12sp"
+                android:minWidth="120dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvMouthCalibInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="状态: 未校准"
+            android:textColor="#FFAA00"
+            android:textSize="11sp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 实时数据区 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="实时数据"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tvCalibRealtime"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="等待面部检测..."
+            android:textColor="#00FF00"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:lineSpacingExtra="2dp" />
+
+            </LinearLayout>
+        </ScrollView>
     </LinearLayout>
 
 </FrameLayout>

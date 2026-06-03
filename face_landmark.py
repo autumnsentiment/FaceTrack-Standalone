@@ -51,10 +51,10 @@ MEDIAPIPE_TO_VRCFT = {
     "eyeLookDownRight":      "v2/EyeRightY",
     "eyeLookUpLeft":         "v2/EyeLeftY",             # 正值=上看
     "eyeLookUpRight":        "v2/EyeRightY",
-    "eyeLookInLeft":         "v2/EyeLeftX",             # 负值=内看
-    "eyeLookInRight":        "v2/EyeRightX",            # 正值=内看
-    "eyeLookOutLeft":        "v2/EyeLeftX",             # 正值=外看
-    "eyeLookOutRight":       "v2/EyeRightX",            # 负值=外看
+    "eyeLookInLeft":         "v2/EyeLeftX",             # 正值=内看(右看)
+    "eyeLookInRight":        "v2/EyeRightX",            # 负值=内看(左看)
+    "eyeLookOutLeft":        "v2/EyeLeftX",             # 负值=外看(左看)
+    "eyeLookOutRight":       "v2/EyeRightX",            # 正值=外看(右看)
     # 眉毛
     "browDownLeft":          "v2/BrowLowererLeft",
     "browDownRight":         "v2/BrowLowererRight",
@@ -78,8 +78,12 @@ _MERGE_PARAMS = {
     "v2/MouthX":     {"mouthLeft": -1.0, "mouthRight": 1.0},
     "v2/EyeLeftY":   {"eyeLookDownLeft": -1.0, "eyeLookUpLeft": 1.0},
     "v2/EyeRightY":  {"eyeLookDownRight": -1.0, "eyeLookUpRight": 1.0},
-    "v2/EyeLeftX":   {"eyeLookInLeft": -1.0, "eyeLookOutLeft": 1.0},
-    "v2/EyeRightX":  {"eyeLookInRight": 1.0, "eyeLookOutRight": -1.0},
+    # VRCFT 标准: EyeLeftX 正=右看, 负=左看
+    # eyeLookInLeft=左眼内看(右看) 贡献正值, eyeLookOutLeft=左眼外看(左看) 贡献负值
+    "v2/EyeLeftX":   {"eyeLookInLeft": 1.0, "eyeLookOutLeft": -1.0},
+    # VRCFT 标准: EyeRightX 正=右看, 负=左看
+    # eyeLookOutRight=右眼外看(右看) 贡献正值, eyeLookInRight=右眼内看(左看) 贡献负值
+    "v2/EyeRightX":  {"eyeLookInRight": -1.0, "eyeLookOutRight": 1.0},
 }
 
 # 眼睛闭合参数: blink 值反转 (1-blink = 睁开度), widen 值叠加
@@ -208,7 +212,10 @@ class FaceLandmarkDetector:
                  blendshape_smoothing: float = 0.0,
                  head_position_scale: float = 1.0,
                  head_position_offset: list = None,
-                 head_rotation_smoothing: float = 0.3):
+                 head_rotation_smoothing: float = 0.3,
+                 eye_sensitivity: float = 1.0,
+                 mouth_sensitivity: float = 1.0,
+                 is_mirrored: bool = False):
         self.max_num_faces = max_num_faces
         self.refine_landmarks = refine_landmarks
         self.min_detection_confidence = min_detection_confidence
@@ -250,6 +257,47 @@ class FaceLandmarkDetector:
         #   佩戴头显时旋转数据可能有抖动，需要额外平滑
         #   推荐值: 0.2~0.5
         self.head_rotation_smoothing = head_rotation_smoothing
+
+        # ===== 眼部灵敏度参数 =====
+        # eye_sensitivity: 眼部追踪灵敏度倍率
+        #   1.0 = 默认灵敏度 (MediaPipe 原始值)
+        #   0.5 = 低灵敏度 (眨眼/睁大响应减弱，适合眼部微动较多的情况)
+        #   1.5~2.0 = 高灵敏度 (眨眼/睁大响应增强，适合眼部动作幅度小的情况)
+        #   影响 eyeBlink 和 eyeWide 的响应曲线
+        self.eye_sensitivity = eye_sensitivity
+
+        # ===== 瞳孔校准偏移 =====
+        # 校准时捕获的原始 blendshape 值，用于将校准位置设为视线居中
+        # 默认全为 0 (无校准)，调用 calibrate_pupil() 设置
+        self._eye_calibration = {
+            "eyeLookOutLeft": 0.0, "eyeLookInLeft": 0.0,
+            "eyeLookInRight": 0.0, "eyeLookOutRight": 0.0,
+            "eyeLookUpLeft": 0.0, "eyeLookDownLeft": 0.0,
+            "eyeLookUpRight": 0.0, "eyeLookDownRight": 0.0,
+        }
+        self._eye_calibrated = False
+
+        # ===== 嘴部灵敏度参数 =====
+        # mouth_sensitivity: 嘴部追踪灵敏度倍率
+        #   1.0 = 默认灵敏度
+        #   0.5 = 低灵敏度
+        #   1.5~2.0 = 高灵敏度
+        self.mouth_sensitivity = mouth_sensitivity
+
+        # ===== 嘴部校准偏移 =====
+        # 闭合校准: 嘴巴闭合时的 jawOpen/mouthClose 值
+        # 最大值校准: 嘴巴最大张开时的 jawOpen/mouthClose 值
+        self._mouth_calibration = {
+            "closed_jaw_open": 0.0,
+            "closed_mouth_close": 0.0,
+            "max_jaw_open": 1.0,
+            "max_mouth_close": 0.0,
+        }
+        self._mouth_calibrated = False
+
+        # ===== 镜像翻转 =====
+        # is_mirrored: 开启后交换左右 blendshape，解决前置摄像头镜像问题
+        self.is_mirrored = is_mirrored
 
         # OneEuro 滤波器（每个参数独立滤波）
         self._filters: Dict[str, OneEuroFilter1D] = {}
@@ -479,10 +527,50 @@ class FaceLandmarkDetector:
         vrcft = {}
         t = time.perf_counter()
 
+        # ===== 0. 镜像翻转: 交换左右 blendshape =====
+        if self.is_mirrored:
+            swap_pairs = [
+                ("eyeBlinkLeft", "eyeBlinkRight"),
+                ("eyeWideLeft", "eyeWideRight"),
+                ("eyeSquintLeft", "eyeSquintRight"),
+                ("eyeLookOutLeft", "eyeLookInRight"),
+                ("eyeLookInLeft", "eyeLookOutRight"),
+                ("eyeLookUpLeft", "eyeLookUpRight"),
+                ("eyeLookDownLeft", "eyeLookDownRight"),
+                ("browDownLeft", "browDownRight"),
+                ("browOuterUpLeft", "browOuterUpRight"),
+                ("noseSneerLeft", "noseSneerRight"),
+                ("cheekSquintLeft", "cheekSquintRight"),
+                ("mouthSmileLeft", "mouthSmileRight"),
+                ("mouthFrownLeft", "mouthFrownRight"),
+                ("mouthDimpleLeft", "mouthDimpleRight"),
+                ("mouthPressLeft", "mouthPressRight"),
+                ("mouthStretchLeft", "mouthStretchRight"),
+                ("mouthLowerDownLeft", "mouthLowerDownRight"),
+                ("mouthUpperUpLeft", "mouthUpperUpRight"),
+                ("jawLeft", "jawRight"),
+                ("mouthLeft", "mouthRight"),
+            ]
+            for l, r in swap_pairs:
+                lv = bs_dict.get(l, 0.0)
+                rv = bs_dict.get(r, 0.0)
+                bs_dict[l] = rv
+                bs_dict[r] = lv
+
         # ===== 1. 直接映射的参数 =====
+        # 嘴部核心参数先提取，校准后再映射
+        raw_jaw_open = bs_dict.get("jawOpen", 0.0)
+        raw_mouth_close = bs_dict.get("mouthClose", 0.0)
+
+        if self._mouth_calibrated:
+            jaw_open_range = self._mouth_calibration["max_jaw_open"] - self._mouth_calibration["closed_jaw_open"]
+            if jaw_open_range > 0.001:
+                raw_jaw_open = (raw_jaw_open - self._mouth_calibration["closed_jaw_open"]) / jaw_open_range
+            mouth_close_range = self._mouth_calibration["max_mouth_close"] - self._mouth_calibration["closed_mouth_close"]
+            if mouth_close_range > 0.001:
+                raw_mouth_close = (raw_mouth_close - self._mouth_calibration["closed_mouth_close"]) / mouth_close_range
+
         direct_map = {
-            "jawOpen":             "v2/JawOpen",
-            "mouthClose":          "v2/MouthClosed",
             "mouthFunnel":         "v2/LipFunnel",
             "mouthPucker":         "v2/LipPucker",
             "mouthSmileLeft":      "v2/MouthSmileLeft",
@@ -527,6 +615,9 @@ class FaceLandmarkDetector:
         }
         for mp_name, vrcft_name in direct_map.items():
             val = bs_dict.get(mp_name, 0.0)
+            # 嘴部参数应用灵敏度
+            if mp_name in _MOUTH_BLENDSHAPES:
+                val = val * self.mouth_sensitivity
             # 嘴部参数跳过 OneEuro 二次滤波（已在 blendshape 阶段用低系数平滑过）
             if self.mouth_skip_vrcft_smooth and vrcft_name in _MOUTH_VRCFT_PARAMS:
                 vrcft[vrcft_name] = float(np.clip(val, 0.0, 1.0))
@@ -534,10 +625,16 @@ class FaceLandmarkDetector:
                 val = self._apply_smooth(f"vrcft_{vrcft_name}", val, t)
                 vrcft[vrcft_name] = float(np.clip(val, 0.0, 1.0))
 
+        # JawOpen 和 MouthClosed: 使用校准后的值 + 灵敏度
+        jaw_open_val = raw_jaw_open * self.mouth_sensitivity
+        vrcft["v2/JawOpen"] = float(np.clip(jaw_open_val, 0.0, 1.0))
+        mouth_close_val = raw_mouth_close * self.mouth_sensitivity
+        vrcft["v2/MouthClosed"] = float(np.clip(mouth_close_val, 0.0, 1.0))
+
         # ===== 2. 合并映射: JawX (左负右正) =====
         jaw_left = bs_dict.get("jawLeft", 0.0)
         jaw_right = bs_dict.get("jawRight", 0.0)
-        jaw_x = jaw_right - jaw_left
+        jaw_x = (jaw_right - jaw_left) * self.mouth_sensitivity
         if self.mouth_skip_vrcft_smooth:
             vrcft["v2/JawX"] = float(np.clip(jaw_x, -1.0, 1.0))
         else:
@@ -547,7 +644,7 @@ class FaceLandmarkDetector:
         # ===== 3. 合并映射: MouthX (左负右正) =====
         mouth_left = bs_dict.get("mouthLeft", 0.0)
         mouth_right = bs_dict.get("mouthRight", 0.0)
-        mouth_x = mouth_right - mouth_left
+        mouth_x = (mouth_right - mouth_left) * self.mouth_sensitivity
         if self.mouth_skip_vrcft_smooth:
             vrcft["v2/MouthX"] = float(np.clip(mouth_x, -1.0, 1.0))
         else:
@@ -558,12 +655,16 @@ class FaceLandmarkDetector:
         # VRCFT 标准: EyeLidLeft/Right
         #   0.0 = 完全闭合, 0.75 = 正常睁开, 1.0 = 睁大
         # MediaPipe: eyeBlink (0=睁开, 1=闭合), eyeWide (0=正常, 1=宽眼)
+        # eye_sensitivity: 灵敏度倍率，增强或减弱 blink/widen 的响应
         for side, blink_name, widen_name in [
             ("Left", "eyeBlinkLeft", "eyeWideLeft"),
             ("Right", "eyeBlinkRight", "eyeWideRight"),
         ]:
             blink = bs_dict.get(blink_name, 0.0)
             widen = bs_dict.get(widen_name, 0.0)
+            # 应用灵敏度: blink 放大 (更容易闭合), widen 放大 (更容易睁大)
+            blink = min(1.0, blink * self.eye_sensitivity)
+            widen = min(1.0, widen * self.eye_sensitivity)
             # 闭合度反转: openness = 1 - blink
             openness = 1.0 - blink
             # 映射到 VRCFT 范围: 0-0.75 为睁开度, 0.75-1.0 为宽眼
@@ -571,32 +672,41 @@ class FaceLandmarkDetector:
             eye_lid = self._apply_smooth(f"vrcft_v2/EyeLid{side}", eye_lid, t)
             vrcft[f"v2/EyeLid{side}"] = float(np.clip(eye_lid, 0.0, 1.0))
 
-        # ===== 5. 眼睛视线: EyeX/Y =====
-        # EyeLeftX: 正=右看, 负=左看
-        look_in_l = bs_dict.get("eyeLookInLeft", 0.0)
-        look_out_l = bs_dict.get("eyeLookOutLeft", 0.0)
-        eye_left_x = look_out_l - look_in_l
+        # ===== 5. 眼睛视线: EyeX/Y (校准后以校准位置为居中) =====
+        # VRCFT 标准: EyeLeftX 正=右看, 负=左看
+        # eyeLookInLeft=左眼内看(右看) 贡献正值, eyeLookOutLeft=左眼外看(左看) 贡献负值
+        look_out_l = bs_dict.get("eyeLookOutLeft", 0.0) - self._eye_calibration["eyeLookOutLeft"]
+        look_in_l = bs_dict.get("eyeLookInLeft", 0.0) - self._eye_calibration["eyeLookInLeft"]
+        eye_left_x = (look_in_l - look_out_l) * self.eye_sensitivity
         eye_left_x = self._apply_smooth("vrcft_v2/EyeLeftX", eye_left_x, t)
         vrcft["v2/EyeLeftX"] = float(np.clip(eye_left_x, -1.0, 1.0))
 
-        look_in_r = bs_dict.get("eyeLookInRight", 0.0)
-        look_out_r = bs_dict.get("eyeLookOutRight", 0.0)
-        eye_right_x = look_in_r - look_out_r
+        # VRCFT 标准: EyeRightX 正=右看, 负=左看
+        # eyeLookOutRight=右眼外看(右看) 贡献正值, eyeLookInRight=右眼内看(左看) 贡献负值
+        look_in_r = bs_dict.get("eyeLookInRight", 0.0) - self._eye_calibration["eyeLookInRight"]
+        look_out_r = bs_dict.get("eyeLookOutRight", 0.0) - self._eye_calibration["eyeLookOutRight"]
+        eye_right_x = (look_out_r - look_in_r) * self.eye_sensitivity
         eye_right_x = self._apply_smooth("vrcft_v2/EyeRightX", eye_right_x, t)
         vrcft["v2/EyeRightX"] = float(np.clip(eye_right_x, -1.0, 1.0))
 
         # EyeLeftY: 正=上看, 负=下看
-        look_up_l = bs_dict.get("eyeLookUpLeft", 0.0)
-        look_down_l = bs_dict.get("eyeLookDownLeft", 0.0)
-        eye_left_y = look_up_l - look_down_l
+        look_up_l = bs_dict.get("eyeLookUpLeft", 0.0) - self._eye_calibration["eyeLookUpLeft"]
+        look_down_l = bs_dict.get("eyeLookDownLeft", 0.0) - self._eye_calibration["eyeLookDownLeft"]
+        eye_left_y = (look_up_l - look_down_l) * self.eye_sensitivity
         eye_left_y = self._apply_smooth("vrcft_v2/EyeLeftY", eye_left_y, t)
         vrcft["v2/EyeLeftY"] = float(np.clip(eye_left_y, -1.0, 1.0))
 
-        look_up_r = bs_dict.get("eyeLookUpRight", 0.0)
-        look_down_r = bs_dict.get("eyeLookDownRight", 0.0)
-        eye_right_y = look_up_r - look_down_r
+        look_up_r = bs_dict.get("eyeLookUpRight", 0.0) - self._eye_calibration["eyeLookUpRight"]
+        look_down_r = bs_dict.get("eyeLookDownRight", 0.0) - self._eye_calibration["eyeLookDownRight"]
+        eye_right_y = (look_up_r - look_down_r) * self.eye_sensitivity
         eye_right_y = self._apply_smooth("vrcft_v2/EyeRightY", eye_right_y, t)
         vrcft["v2/EyeRightY"] = float(np.clip(eye_right_y, -1.0, 1.0))
+
+        # ===== 5.5 合并眼部视线 (VRChat 模型常用 EyesX/EyesY) =====
+        eyes_x = (vrcft["v2/EyeLeftX"] + vrcft["v2/EyeRightX"]) / 2.0
+        eyes_y = (vrcft["v2/EyeLeftY"] + vrcft["v2/EyeRightY"]) / 2.0
+        vrcft["v2/EyesX"] = float(np.clip(eyes_x, -1.0, 1.0))
+        vrcft["v2/EyesY"] = float(np.clip(eyes_y, -1.0, 1.0))
 
         # ===== 6. 眉毛内侧上扬: browInnerUp 同时映射到左右 =====
         brow_inner = bs_dict.get("browInnerUp", 0.0)
@@ -612,11 +722,6 @@ class FaceLandmarkDetector:
             (vrcft.get("v2/MouthLowerDownLeft", 0) + vrcft.get("v2/MouthLowerDownRight", 0)) / 2,
             0.0, 1.0
         ))
-
-        # LipFunnel (合并上下)
-        vrcft["v2/LipFunnel"] = vrcft.get("v2/LipFunnel", 0.0)
-        # LipPucker (合并上下)
-        vrcft["v2/LipPucker"] = vrcft.get("v2/LipPucker", 0.0)
 
         # EyeLid (合并左右)
         vrcft["v2/EyeLid"] = float(np.clip(
@@ -751,6 +856,70 @@ class FaceLandmarkDetector:
             self._calibrated = True
             print(f"Face calibrated: mouth_open_ref={self._mouth_open_ref:.4f}, "
                   f"mouth_wide_ref={self._mouth_wide_ref:.4f}")
+
+    def calibrate_pupil(self, bs_dict: Dict[str, float]):
+        """校准瞳孔居中位置
+
+        用户正视前方时调用此方法，捕获当前视线 blendshape 值作为偏移基准。
+        后续推理时，从原始 blendshape 值减去校准偏移，使校准位置成为视线居中(0,0)。
+
+        Args:
+            bs_dict: 当前帧的 blendshape 字典 (category_name -> score)
+        """
+        for key in self._eye_calibration:
+            self._eye_calibration[key] = bs_dict.get(key, 0.0)
+        self._eye_calibrated = True
+        left_x = self._eye_calibration["eyeLookOutLeft"] - self._eye_calibration["eyeLookInLeft"]
+        left_y = self._eye_calibration["eyeLookUpLeft"] - self._eye_calibration["eyeLookDownLeft"]
+        print(f"Pupil calibrated: offset L({left_x:.3f}, {left_y:.3f})")
+
+    def reset_pupil_calibration(self):
+        """重置瞳孔校准"""
+        for key in self._eye_calibration:
+            self._eye_calibration[key] = 0.0
+        self._eye_calibrated = False
+        print("Pupil calibration reset")
+
+    def calibrate_mouth_closed(self, bs_dict: Dict[str, float]):
+        """校准嘴部闭合位置
+
+        用户闭嘴时调用此方法，捕获当前 jawOpen/mouthClose 值作为闭合基准。
+        后续推理时，从原始值减去闭合基准并归一化，使闭合时输出接近 0。
+
+        Args:
+            bs_dict: 当前帧的 blendshape 字典 (category_name -> score)
+        """
+        self._mouth_calibration["closed_jaw_open"] = bs_dict.get("jawOpen", 0.0)
+        self._mouth_calibration["closed_mouth_close"] = bs_dict.get("mouthClose", 0.0)
+        self._mouth_calibrated = True
+        print(f"Mouth closed calibrated: jawOpen={self._mouth_calibration['closed_jaw_open']:.4f}, "
+              f"mouthClose={self._mouth_calibration['closed_mouth_close']:.4f}")
+
+    def calibrate_mouth_max_open(self, bs_dict: Dict[str, float]):
+        """校准嘴部最大张开位置
+
+        用户最大张开嘴时调用此方法，捕获当前 jawOpen/mouthClose 值作为最大值基准。
+        后续推理时，将原始值归一化到 [闭合值, 最大值] 范围。
+
+        Args:
+            bs_dict: 当前帧的 blendshape 字典 (category_name -> score)
+        """
+        self._mouth_calibration["max_jaw_open"] = bs_dict.get("jawOpen", 0.0)
+        self._mouth_calibration["max_mouth_close"] = bs_dict.get("mouthClose", 0.0)
+        self._mouth_calibrated = True
+        print(f"Mouth max open calibrated: jawOpen={self._mouth_calibration['max_jaw_open']:.4f}, "
+              f"mouthClose={self._mouth_calibration['max_mouth_close']:.4f}")
+
+    def reset_mouth_calibration(self):
+        """重置嘴部校准"""
+        self._mouth_calibration = {
+            "closed_jaw_open": 0.0,
+            "closed_mouth_close": 0.0,
+            "max_jaw_open": 1.0,
+            "max_mouth_close": 0.0,
+        }
+        self._mouth_calibrated = False
+        print("Mouth calibration reset")
 
     def reset_filters(self):
         """重置所有滤波器"""

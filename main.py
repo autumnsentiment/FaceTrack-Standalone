@@ -22,11 +22,38 @@ import time
 import argparse
 import os
 import sys
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Dict, Optional
 
 from face_landmark import FaceLandmarkDetector
 from camera_capture import CameraCapture
-from streamers.face_vmc import FaceVMCStreamer
+from streamers.face_vmc import FaceVMCStreamer, _load_avatar_param_map, _load_avatar_binary_params
+
+
+class ParamMapHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/param_map" or self.path == "/param_map/":
+            float_map = _load_avatar_param_map()
+            binary_map = _load_avatar_binary_params()
+            binary_serializable = {}
+            for k, bits in binary_map.items():
+                binary_serializable[k] = {str(bit_val): addr for bit_val, addr in bits.items()}
+            response = json.dumps({
+                "float": float_map,
+                "binary": binary_serializable
+            }, ensure_ascii=False)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(response.encode("utf-8"))
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        pass
 
 
 class FaceTrackApp:
@@ -41,6 +68,8 @@ class FaceTrackApp:
         self.face_streamer = None
         self.running = False
         self._low_light_mode = False
+        self._http_server = None
+        self._http_thread = None
 
     def _load_config(self) -> Dict:
         """加载配置文件"""
@@ -152,6 +181,16 @@ class FaceTrackApp:
         else:
             print("[Stream] WARNING: 推流连接失败，将重试...")
 
+        # 4. 启动参数映射 HTTP 服务 (供 Android 端获取 VRChat 参数映射)
+        map_port = stream_cfg.get("param_map_port", 8900)
+        try:
+            self._http_server = HTTPServer(("0.0.0.0", map_port), ParamMapHandler)
+            self._http_thread = threading.Thread(target=self._http_server.serve_forever, daemon=True)
+            self._http_thread.start()
+            print(f"[ParamMap] HTTP 服务已启动: http://0.0.0.0:{map_port}/param_map")
+        except Exception as e:
+            print(f"[ParamMap] WARNING: HTTP 服务启动失败 ({e})，Android 端将使用默认映射")
+
         print("-" * 50)
         print("  按 [f] 校准面部 | [l] 切换低光模式 | [q] 退出")
         print("-" * 50)
@@ -240,6 +279,10 @@ class FaceTrackApp:
     def stop(self):
         """停止所有模块"""
         self.running = False
+
+        if self._http_server:
+            self._http_server.shutdown()
+            print("[ParamMap] HTTP 服务已停止")
 
         if self.face_streamer:
             self.face_streamer.disconnect()

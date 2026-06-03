@@ -1,5 +1,11 @@
 package com.facetrack.standalone
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Matrix
+import android.graphics.ImageFormat
+import android.graphics.Paint
+import android.graphics.YuvImage
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -8,7 +14,9 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.Spinner
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -18,11 +26,13 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.google.mediapipe.framework.image.MediaImageBuilder
 import com.google.mediapipe.framework.image.MPImage
+import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -67,7 +77,30 @@ class MainActivity : AppCompatActivity() {
     private lateinit var spinnerBackend: Spinner
     private lateinit var tvBackendInfo: TextView
     private lateinit var btnStartStop: Button
-    private lateinit var btnCalibrate: Button
+    private lateinit var seekBarEyeSensitivity: SeekBar
+    private lateinit var tvEyeSensitivity: TextView
+    private lateinit var seekBarMouthSensitivity: SeekBar
+    private lateinit var tvMouthSensitivity: TextView
+    private lateinit var switchMirror: Switch
+
+    // ===== 校准面板控件 =====
+    private lateinit var btnOpenCalibration: ImageButton
+    private lateinit var calibrationPanel: LinearLayout
+    private lateinit var btnCloseCalibration: ImageButton
+    private lateinit var tvCalibStatus: TextView
+    private lateinit var btnCalibratePupil: Button
+    private lateinit var btnResetPupilCalib: Button
+    private lateinit var tvPupilCalibInfo: TextView
+    private lateinit var switchInvertEyeX: Switch
+    private lateinit var switchInvertEyeY: Switch
+    private lateinit var switchSyncEyes: Switch
+    private lateinit var switchSendMergedEyes: Switch
+    private lateinit var btnMouthClosed: Button
+    private lateinit var btnMouthMaxOpen: Button
+    private lateinit var btnResetMouthCalib: Button
+    private lateinit var tvMouthCalibInfo: TextView
+    private lateinit var tvCalibRealtime: TextView
+    private var isCalibrationOpen = false
 
     // ===== 状态 =====
     private var isRunning = false
@@ -77,7 +110,10 @@ class MainActivity : AppCompatActivity() {
     private var fpsTimestamp = System.nanoTime()
     private var currentFps = 0f
     private var currentBackend: NativeHelper.AccelerationBackend = NativeHelper.AccelerationBackend.AUTO
-    private var actualDelegateLabel: String = ""  // 实际使用的 Delegate 标签
+    private var actualDelegateLabel: String = ""
+
+    // ===== 瞳孔校准 =====
+    private var lastBlendshapes: List<com.google.mediapipe.tasks.components.containers.Category>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,7 +132,28 @@ class MainActivity : AppCompatActivity() {
         spinnerBackend = findViewById(R.id.spinnerBackend)
         tvBackendInfo = findViewById(R.id.tvBackendInfo)
         btnStartStop = findViewById(R.id.btnStartStop)
-        btnCalibrate = findViewById(R.id.btnCalibrate)
+        seekBarEyeSensitivity = findViewById(R.id.seekBarEyeSensitivity)
+        tvEyeSensitivity = findViewById(R.id.tvEyeSensitivity)
+        seekBarMouthSensitivity = findViewById(R.id.seekBarMouthSensitivity)
+        tvMouthSensitivity = findViewById(R.id.tvMouthSensitivity)
+        switchMirror = findViewById(R.id.switchMirror)
+
+        btnOpenCalibration = findViewById(R.id.btnOpenCalibration)
+        calibrationPanel = findViewById(R.id.calibrationPanel)
+        btnCloseCalibration = findViewById(R.id.btnCloseCalibration)
+        tvCalibStatus = findViewById(R.id.tvCalibStatus)
+        btnCalibratePupil = findViewById(R.id.btnCalibratePupil)
+        btnResetPupilCalib = findViewById(R.id.btnResetPupilCalib)
+        tvPupilCalibInfo = findViewById(R.id.tvPupilCalibInfo)
+        switchInvertEyeX = findViewById(R.id.switchInvertEyeX)
+        switchInvertEyeY = findViewById(R.id.switchInvertEyeY)
+        switchSyncEyes = findViewById(R.id.switchSyncEyes)
+        switchSendMergedEyes = findViewById(R.id.switchSendMergedEyes)
+        btnMouthClosed = findViewById(R.id.btnMouthClosed)
+        btnMouthMaxOpen = findViewById(R.id.btnMouthMaxOpen)
+        btnResetMouthCalib = findViewById(R.id.btnResetMouthCalib)
+        tvMouthCalibInfo = findViewById(R.id.tvMouthCalibInfo)
+        tvCalibRealtime = findViewById(R.id.tvCalibRealtime)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
         setupUI()
@@ -129,13 +186,96 @@ class MainActivity : AppCompatActivity() {
             if (isRunning) stopTracking() else startTracking()
         }
 
-        // 校准
-        btnCalibrate.setOnClickListener {
-            Toast.makeText(this, "校准面部", Toast.LENGTH_SHORT).show()
+        // 校准面板入口
+        btnOpenCalibration.setOnClickListener {
+            openCalibrationPanel()
+        }
+
+        // 关闭校准面板
+        btnCloseCalibration.setOnClickListener {
+            closeCalibrationPanel()
+        }
+
+        // 瞳孔居中校准
+        btnCalibratePupil.setOnClickListener {
+            calibratePupil()
+        }
+
+        // 重置瞳孔校准
+        btnResetPupilCalib.setOnClickListener {
+            config = config.copy(eyeCalibration = EyeCalibrationOffset())
+            tvPupilCalibInfo.text = "状态: 未校准"
+            Toast.makeText(this, "瞳孔校准已重置", Toast.LENGTH_SHORT).show()
+        }
+
+        // 眼部X轴取负
+        switchInvertEyeX.setOnCheckedChangeListener { _, isChecked ->
+            config = config.copy(invertEyeX = isChecked)
+        }
+
+        // 眼部Y轴取负
+        switchInvertEyeY.setOnCheckedChangeListener { _, isChecked ->
+            config = config.copy(invertEyeY = isChecked)
+        }
+
+        // 双眼同步
+        switchSyncEyes.setOnCheckedChangeListener { _, isChecked ->
+            config = config.copy(syncEyes = isChecked)
+        }
+
+        // 发送合并眼部参数
+        switchSendMergedEyes.setOnCheckedChangeListener { _, isChecked ->
+            config = config.copy(sendMergedEyes = isChecked)
+        }
+
+        // 嘴部闭合校准
+        btnMouthClosed.setOnClickListener {
+            calibrateMouthClosed()
+        }
+
+        // 嘴部最大值校准
+        btnMouthMaxOpen.setOnClickListener {
+            calibrateMouthMaxOpen()
+        }
+
+        // 重置嘴部校准
+        btnResetMouthCalib.setOnClickListener {
+            config = config.copy(mouthCalibration = MouthCalibrationOffset())
+            tvMouthCalibInfo.text = "状态: 未校准"
+            Toast.makeText(this, "嘴部校准已重置", Toast.LENGTH_SHORT).show()
         }
 
         // 推理硬件选择
         setupBackendSpinner()
+
+        // 眼部灵敏度 SeekBar (0.3 ~ 3.0, 步进 0.1, 默认 1.0)
+        seekBarEyeSensitivity.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                val sensitivity = (progress + 3) / 10f
+                tvEyeSensitivity.text = String.format("%.1f", sensitivity)
+                config = config.copy(eyeSensitivity = sensitivity)
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        // 嘴部灵敏度 SeekBar (0.3 ~ 3.0, 步进 0.1, 默认 1.0)
+        seekBarMouthSensitivity.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                val sensitivity = (progress + 3) / 10f
+                tvMouthSensitivity.text = String.format("%.1f", sensitivity)
+                config = config.copy(mouthSensitivity = sensitivity)
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        // 镜像开关
+        // 开启时翻转推理帧，MediaPipe 输出已正确，预览也翻转保持自然视角
+        switchMirror.setOnCheckedChangeListener { _, isChecked ->
+            config = config.copy(isMirrored = isChecked)
+            viewFinder.scaleX = if (isChecked) -1f else 1f
+        }
 
         // 进入时摄像头关闭，推流按钮禁用
         btnStartStop.isEnabled = false
@@ -161,6 +301,41 @@ class MainActivity : AppCompatActivity() {
         settingsPanel.visibility = View.GONE
         btnSettings.setImageResource(android.R.drawable.ic_menu_preferences)
         isPanelOpen = false
+    }
+
+    private fun openCalibrationPanel() {
+        if (isPanelOpen) closeSettingsPanel()
+        calibrationPanel.visibility = View.VISIBLE
+        isCalibrationOpen = true
+        updateCalibrationInfo()
+    }
+
+    private fun closeCalibrationPanel() {
+        calibrationPanel.visibility = View.GONE
+        isCalibrationOpen = false
+    }
+
+    private fun updateCalibrationInfo() {
+        val eyeCal = config.eyeCalibration
+        val mouthCal = config.mouthCalibration
+
+        tvPupilCalibInfo.text = if (eyeCal.isCalibrated) {
+            val lx = String.format("%.3f", eyeCal.lookOutLeft - eyeCal.lookInLeft)
+            val ly = String.format("%.3f", eyeCal.lookUpLeft - eyeCal.lookDownLeft)
+            val rx = String.format("%.3f", eyeCal.lookInRight - eyeCal.lookOutRight)
+            val ry = String.format("%.3f", eyeCal.lookUpRight - eyeCal.lookDownRight)
+            "状态: 已校准 | L偏移($lx,$ly) R偏移($rx,$ry)"
+        } else {
+            "状态: 未校准"
+        }
+
+        tvMouthCalibInfo.text = if (mouthCal.isCalibrated) {
+            "状态: 已校准 | 闭合=${String.format("%.3f", mouthCal.closedJawOpen)} 最大=${String.format("%.3f", mouthCal.maxJawOpen)}"
+        } else {
+            "状态: 未校准"
+        }
+
+        tvCalibStatus.text = if (lastBlendshapes != null) "面部已检测，可进行校准" else "请先开启摄像头并检测到面部"
     }
 
     /**
@@ -601,15 +776,47 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
 
-                val mpImage: MPImage = MediaImageBuilder(mediaImage).build()
                 val timestamp = System.nanoTime() / 1_000_000
-                faceLandmarker?.detectAsync(mpImage, timestamp)
+
+                if (config.isMirrored) {
+                    val bitmap = yuvImageToBitmap(mediaImage, imageProxy)
+                    val matrix = Matrix().apply { postScale(-1f, 1f, bitmap.width / 2f, bitmap.height / 2f) }
+                    val mirroredBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                    val mpImage: MPImage = BitmapImageBuilder(mirroredBitmap).build()
+                    faceLandmarker?.detectAsync(mpImage, timestamp)
+                    bitmap.recycle()
+                    if (mirroredBitmap !== bitmap) mirroredBitmap.recycle()
+                } else {
+                    val mpImage: MPImage = MediaImageBuilder(mediaImage).build()
+                    faceLandmarker?.detectAsync(mpImage, timestamp)
+                }
 
             } catch (e: Exception) {
                 Log.e(TAG, "Analysis error", e)
             } finally {
                 imageProxy.close()
             }
+        }
+
+        private fun yuvImageToBitmap(image: android.media.Image, imageProxy: ImageProxy): Bitmap {
+            val yBuffer = image.planes[0].buffer
+            val uBuffer = image.planes[1].buffer
+            val vBuffer = image.planes[2].buffer
+
+            val ySize = yBuffer.remaining()
+            val uSize = uBuffer.remaining()
+            val vSize = vBuffer.remaining()
+
+            val nv21 = ByteArray(ySize + uSize + vSize)
+            yBuffer.get(nv21, 0, ySize)
+            vBuffer.get(nv21, ySize, vSize)
+            uBuffer.get(nv21, ySize + vSize, uSize)
+
+            val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
+            val out = ByteArrayOutputStream()
+            yuvImage.compressToJpeg(android.graphics.Rect(0, 0, image.width, image.height), 90, out)
+            val imageBytes = out.toByteArray()
+            return android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
         }
     }
 
@@ -622,8 +829,15 @@ class MainActivity : AppCompatActivity() {
         if (faceDetected && blendshapesOptional.isPresent) {
             val faceBlendshapes = blendshapesOptional.get()
             if (faceBlendshapes.isNotEmpty()) {
+                lastBlendshapes = faceBlendshapes[0]
+
                 val faceData = MediaPipeHelper.extractFaceData(
-                    landmarks[0], faceBlendshapes[0]
+                    landmarks[0], faceBlendshapes[0],
+                    config.eyeSensitivity, config.eyeCalibration,
+                    config.mouthSensitivity, config.mouthCalibration,
+                    false,
+                    config.invertEyeX, config.invertEyeY,
+                    config.syncEyes, config.sendMergedEyes
                 )
 
                 faceStreamer?.sendFaceData(faceData)
@@ -657,6 +871,7 @@ class MainActivity : AppCompatActivity() {
 
         faceStreamer = FaceVMCStreamer(config.host, config.oscPort, config.vmcPort)
         if (faceStreamer?.connect() == true) {
+            fetchParamMap(config.host)
             isRunning = true
             updateStatus("推流中 | ${config.host}:${config.oscPort} VMC:${config.vmcPort}")
             btnStartStop.text = "停止推流"
@@ -667,6 +882,64 @@ class MainActivity : AppCompatActivity() {
         } else {
             Toast.makeText(this, "推流连接失败: ${config.host}:${config.oscPort}", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun fetchParamMap(host: String) {
+        Thread {
+            try {
+                val url = java.net.URL("http://$host:8900/param_map")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 3000
+                conn.readTimeout = 3000
+
+                if (conn.responseCode == 200) {
+                    val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
+                    val jsonObj = org.json.JSONObject(jsonStr)
+
+                    val floatMap = mutableMapOf<String, String>()
+                    val floatObj = jsonObj.optJSONObject("float")
+                    if (floatObj != null) {
+                        val keys = floatObj.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            floatMap[key] = floatObj.getString(key)
+                        }
+                    }
+
+                    val binaryMap = mutableMapOf<String, Map<Int, String>>()
+                    val binaryObj = jsonObj.optJSONObject("binary")
+                    if (binaryObj != null) {
+                        val groupKeys = binaryObj.keys()
+                        while (groupKeys.hasNext()) {
+                            val groupKey = groupKeys.next()
+                            val bitsObj = binaryObj.getJSONObject(groupKey)
+                            val bitsMap = mutableMapOf<Int, String>()
+                            val bitKeys = bitsObj.keys()
+                            while (bitKeys.hasNext()) {
+                                val bitKey = bitKeys.next()
+                                bitsMap[bitKey.toInt()] = bitsObj.getString(bitKey)
+                            }
+                            binaryMap[groupKey] = bitsMap
+                        }
+                    }
+
+                    faceStreamer?.updateParamMap(floatMap, binaryMap)
+                    Log.d(TAG, "Param map fetched: ${floatMap.size} float, ${binaryMap.size} binary")
+                    runOnUiThread {
+                        Toast.makeText(this, "参数映射已加载: ${floatMap.size}个参数", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Log.w(TAG, "Param map fetch failed: HTTP ${conn.responseCode}")
+                }
+                conn.disconnect()
+            } catch (e: Exception) {
+                Log.w(TAG, "Param map fetch failed, using default mapping: ${e.message}")
+                runOnUiThread {
+                    Toast.makeText(this, "使用默认参数映射 (ft/f/前缀)", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
     }
 
     private fun stopTracking() {
@@ -681,6 +954,95 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "Tracking stopped")
     }
 
+    private fun calibratePupil() {
+        val bs = lastBlendshapes
+        if (bs == null) {
+            Toast.makeText(this, "请先开启摄像头并检测到面部", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val bsMap = mutableMapOf<String, Float>()
+        for (category in bs) {
+            bsMap[category.categoryName()] = category.score()
+        }
+
+        val calibration = EyeCalibrationOffset(
+            lookOutLeft = bsMap["eyeLookOutLeft"] ?: 0f,
+            lookInLeft = bsMap["eyeLookInLeft"] ?: 0f,
+            lookInRight = bsMap["eyeLookInRight"] ?: 0f,
+            lookOutRight = bsMap["eyeLookOutRight"] ?: 0f,
+            lookUpLeft = bsMap["eyeLookUpLeft"] ?: 0f,
+            lookDownLeft = bsMap["eyeLookDownLeft"] ?: 0f,
+            lookUpRight = bsMap["eyeLookUpRight"] ?: 0f,
+            lookDownRight = bsMap["eyeLookDownRight"] ?: 0f
+        )
+
+        config = config.copy(eyeCalibration = calibration)
+
+        val leftX = String.format("%.3f", (calibration.lookOutLeft - calibration.lookInLeft))
+        val leftY = String.format("%.3f", (calibration.lookUpLeft - calibration.lookDownLeft))
+        val rightX = String.format("%.3f", (calibration.lookInRight - calibration.lookOutRight))
+        val rightY = String.format("%.3f", (calibration.lookUpRight - calibration.lookDownRight))
+        Log.d(TAG, "Pupil calibrated: L($leftX, $leftY) R($rightX, $rightY)")
+        Toast.makeText(this, "瞳孔校准完成 (正视前方已设为居中)", Toast.LENGTH_SHORT).show()
+        updateCalibrationInfo()
+    }
+
+    private fun getBsMap(): Map<String, Float>? {
+        val bs = lastBlendshapes ?: return null
+        val map = mutableMapOf<String, Float>()
+        for (category in bs) {
+            map[category.categoryName()] = category.score()
+        }
+        return map
+    }
+
+    private fun calibrateMouthClosed() {
+        val bsMap = getBsMap()
+        if (bsMap == null) {
+            Toast.makeText(this, "请先开启摄像头并检测到面部", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val jawOpen = bsMap["jawOpen"] ?: 0f
+        val mouthClose = bsMap["mouthClose"] ?: 0f
+
+        val prev = config.mouthCalibration
+        config = config.copy(
+            mouthCalibration = prev.copy(
+                closedJawOpen = jawOpen,
+                closedMouthClose = mouthClose
+            )
+        )
+
+        Log.d(TAG, "Mouth closed calibrated: jawOpen=$jawOpen, mouthClose=$mouthClose")
+        Toast.makeText(this, "嘴部闭合校准完成 (jawOpen=${String.format("%.3f", jawOpen)})", Toast.LENGTH_SHORT).show()
+        updateCalibrationInfo()
+    }
+
+    private fun calibrateMouthMaxOpen() {
+        val bsMap = getBsMap()
+        if (bsMap == null) {
+            Toast.makeText(this, "请先开启摄像头并检测到面部", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val jawOpen = bsMap["jawOpen"] ?: 0f
+        val mouthClose = bsMap["mouthClose"] ?: 0f
+
+        val prev = config.mouthCalibration
+        config = config.copy(
+            mouthCalibration = prev.copy(
+                maxJawOpen = jawOpen,
+                maxMouthClose = mouthClose
+            )
+        )
+
+        Log.d(TAG, "Mouth max calibrated: jawOpen=$jawOpen, mouthClose=$mouthClose")
+        Toast.makeText(this, "嘴部最大值校准完成 (jawOpen=${String.format("%.3f", jawOpen)})", Toast.LENGTH_SHORT).show()
+        updateCalibrationInfo()
+    }
+
     private fun updateStatus(statusText: String) {
         runOnUiThread { tvStatus.text = statusText }
     }
@@ -688,9 +1050,31 @@ class MainActivity : AppCompatActivity() {
     private fun updateFaceStatus(faceData: Map<String, Float>) {
         runOnUiThread {
             val mouth = faceData["v2/JawOpen"]?.let { String.format("%.2f", it) } ?: "-"
-            val smile = faceData["v2/MouthSmileLeft"]?.let { String.format("%.2f", it) } ?: "-"
+            val eyeX = faceData["v2/EyesX"]?.let { String.format("%.2f", it) } ?: "-"
+            val eyeY = faceData["v2/EyesY"]?.let { String.format("%.2f", it) } ?: "-"
+            val eyeCalMark = if (config.eyeCalibration.isCalibrated) "瞳✓" else "瞳✗"
+            val mouthCalMark = if (config.mouthCalibration.isCalibrated) "嘴✓" else "嘴✗"
+            val mirrorMark = if (config.isMirrored) "镜" else ""
+            val invertMark = when {
+                config.invertEyeX && config.invertEyeY -> "反XY"
+                config.invertEyeX -> "反X"
+                config.invertEyeY -> "反Y"
+                else -> ""
+            }
+            val syncMark = if (config.syncEyes) "同步" else ""
             val label = actualDelegateLabel.ifEmpty { "CPU" }
-            tvStatus.text = "[$label] FPS: ${currentFps.toInt()} | 嘴: $mouth | 笑: $smile"
+            tvStatus.text = "[$label] FPS: ${currentFps.toInt()} | 嘴: $mouth $mouthCalMark | 眼: $eyeX,$eyeY $eyeCalMark $mirrorMark $invertMark $syncMark"
+
+            if (isCalibrationOpen) {
+                val eyeLX = faceData["v2/EyeLeftX"]?.let { String.format("%.3f", it) } ?: "-"
+                val eyeLY = faceData["v2/EyeLeftY"]?.let { String.format("%.3f", it) } ?: "-"
+                val eyeRX = faceData["v2/EyeRightX"]?.let { String.format("%.3f", it) } ?: "-"
+                val eyeRY = faceData["v2/EyeRightY"]?.let { String.format("%.3f", it) } ?: "-"
+                val jawOpen = faceData["v2/JawOpen"]?.let { String.format("%.3f", it) } ?: "-"
+                val mouthClose = faceData["v2/MouthClose"]?.let { String.format("%.3f", it) } ?: "-"
+                tvCalibRealtime.text = "左眼 X: $eyeLX  Y: $eyeLY\n右眼 X: $eyeRX  Y: $eyeRY\n合并 X: $eyeX  Y: $eyeY\n嘴部 JawOpen: $jawOpen  MouthClose: $mouthClose"
+                tvCalibStatus.text = "面部已检测，可进行校准"
+            }
         }
     }
 
