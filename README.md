@@ -142,6 +142,11 @@ Get the latest APK from [Releases](../../releases).
 - **Mirror Flip**: Camera frame is now mirrored before inference (not just preview)
 - **Scrollable Menu**: Secondary menu now supports scrolling for smaller screens
 
+**Known Issues | 已知问题:**
+
+- **Right eye may not move independently**: Some VRChat avatars only bind to `EyesX`/`EyesY` merged parameters, which may still result in only the left eye being driven. As a workaround, enable **Eye Sync** in settings to force the right eye to copy left eye data. The root cause is under investigation — it may be related to how VRChat processes combined vs. individual eye parameters.
+- **右眼可能无法独立运动**: 部分 VRChat 模型仅绑定 `EyesX`/`EyesY` 合并参数，仍可能导致仅左眼被驱动。可在设置中开启**眼部同步**作为临时解决方案，强制右眼复制左眼数据。根因仍在排查中——可能与 VRChat 处理合并/独立眼部参数的方式有关。
+
 **Files Changed:**
 - `Helpers.kt` - Eye sign convention, always send EyesX/EyesY, eye sync, eye invert, mirror flip
 - `FaceVMCStreamer.kt` - OSC address format, eye parameter aliases, VMC eye mappings
