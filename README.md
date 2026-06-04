@@ -36,6 +36,13 @@ Real-time facial landmark tracking and VMC/OSC streaming for Android, powered by
 
 ## Screenshots | 截图
 
+<div align="center">
+  <img src="screenshots/screenshot1.jpg" width="24%" alt="Screenshot 1" />
+  <img src="screenshots/screenshot2.jpg" width="24%" alt="Screenshot 2" />
+  <img src="screenshots/screenshot3.jpg" width="24%" alt="Screenshot 3" />
+  <img src="screenshots/screenshot4.jpg" width="24%" alt="Screenshot 4" />
+</div>
+
 > Camera preview with floating controls and settings panel
 > 摄像头全屏预览，浮动控制按钮与设置面板
 
