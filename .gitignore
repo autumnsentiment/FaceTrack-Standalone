@@ -20,7 +20,11 @@ __pycache__/
 Thumbs.db
 
 # APK (通过 Release 分发)
-*.apk
+# android/app/build/ 下的 APK 不提交，但 release/ 目录下的可以
+android/app/build/**/*.apk
+
+# Release 目录 - 允许提交 APK
+!release/*.apk
 
 # 大文件 - 可通过 SDK Manager 重新下载
 android/cmdline-tools/
