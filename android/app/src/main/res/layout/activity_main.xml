@@ -466,6 +466,67 @@
             android:textSize="11sp"
             android:layout_marginBottom="8dp" />
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="眼睛识别范围校准"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="用当前识别值设置推流最小/最大幅度，只影响 OSC/VMC 推流"
+            android:textColor="#AAAAAA"
+            android:textSize="10sp"
+            android:layout_marginBottom="6dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <Button
+                android:id="@+id/btnEyeRangeMin"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:text="当前设为最小值"
+                android:textSize="12sp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnEyeRangeMax"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:text="当前设为最大值"
+                android:textSize="12sp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnResetEyeRange"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="重置"
+                android:textSize="12sp"
+                android:minWidth="64dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvEyeRangeInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="状态: 未设置"
+            android:textColor="#FFAA00"
+            android:textSize="11sp"
+            android:layout_marginBottom="8dp" />
+
         <!-- 眼部取负开关 -->
         <LinearLayout
             android:layout_width="match_parent"
