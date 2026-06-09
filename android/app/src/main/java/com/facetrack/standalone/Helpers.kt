@@ -21,6 +21,7 @@ data class AppConfig(
     val faceTrackingConfidence: Float = 0.5f,
     val eyeSensitivity: Float = 1.0f,
     val eyeCalibration: EyeCalibrationOffset = EyeCalibrationOffset(),
+    val eyeRangeCalibration: EyeRangeCalibration = EyeRangeCalibration(),
     val mouthSensitivity: Float = 1.0f,
     val mouthCalibration: MouthCalibrationOffset = MouthCalibrationOffset(),
     val isMirrored: Boolean = false,
@@ -53,6 +54,15 @@ data class MouthCalibrationOffset(
     val maxMouthClose: Float = 0f
 ) {
     val isCalibrated: Boolean get() = closedJawOpen != 0f || maxJawOpen != 1f
+}
+
+data class EyeRangeCalibration(
+    val minValues: Map<String, Float> = emptyMap(),
+    val maxValues: Map<String, Float> = emptyMap()
+) {
+    val hasMin: Boolean get() = minValues.isNotEmpty()
+    val hasMax: Boolean get() = maxValues.isNotEmpty()
+    val isCalibrated: Boolean get() = hasMin && hasMax
 }
 
 /**
@@ -99,6 +109,13 @@ object ModelHelper {
  */
 object MediaPipeHelper {
     private const val TAG = "MediaPipeHelper"
+
+    val EYE_RANGE_PARAMS = listOf(
+        "v2/EyeLeftX", "v2/EyeLeftY",
+        "v2/EyeRightX", "v2/EyeRightY",
+        "v2/EyeLidLeft", "v2/EyeLidRight",
+        "v2/EyeSquintLeft", "v2/EyeSquintRight"
+    )
 
     /**
      * 从 MediaPipe 结果提取 VRCFT 面部参数
@@ -294,5 +311,53 @@ object MediaPipeHelper {
         result["LipTrackingActive"] = 1.0f
 
         return result
+    }
+
+    fun captureEyeRangeValues(faceData: Map<String, Float>): Map<String, Float> {
+        return EYE_RANGE_PARAMS.mapNotNull { key ->
+            faceData[key]?.let { value -> key to value }
+        }.toMap()
+    }
+
+    fun applyEyeRangeCalibration(
+        faceData: Map<String, Float>,
+        calibration: EyeRangeCalibration
+    ): Map<String, Float> {
+        if (!calibration.isCalibrated) return faceData
+
+        val result = faceData.toMutableMap()
+        for (paramName in EYE_RANGE_PARAMS) {
+            val value = faceData[paramName] ?: continue
+            val minValue = calibration.minValues[paramName] ?: continue
+            val maxValue = calibration.maxValues[paramName] ?: continue
+            result[paramName] = remapEyeValue(paramName, value, minValue, maxValue)
+        }
+
+        if ("v2/EyesX" in result) {
+            val left = result["v2/EyeLeftX"]
+            val right = result["v2/EyeRightX"]
+            if (left != null && right != null) {
+                result["v2/EyesX"] = ((left + right) / 2f).coerceIn(-1f, 1f)
+            }
+        }
+        if ("v2/EyesY" in result) {
+            val left = result["v2/EyeLeftY"]
+            val right = result["v2/EyeRightY"]
+            if (left != null && right != null) {
+                result["v2/EyesY"] = ((left + right) / 2f).coerceIn(-1f, 1f)
+            }
+        }
+
+        return result
+    }
+
+    private fun remapEyeValue(paramName: String, value: Float, minValue: Float, maxValue: Float): Float {
+        val targetMin = if (paramName.endsWith("X") || paramName.endsWith("Y")) -1f else 0f
+        val targetMax = 1f
+        val range = maxValue - minValue
+        if (kotlin.math.abs(range) <= 0.001f) return value.coerceIn(targetMin, targetMax)
+
+        val normalized = ((value - minValue) / range).coerceIn(0f, 1f)
+        return (targetMin + normalized * (targetMax - targetMin)).coerceIn(targetMin, targetMax)
     }
 }
