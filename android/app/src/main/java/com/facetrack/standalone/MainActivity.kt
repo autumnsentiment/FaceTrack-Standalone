@@ -91,6 +91,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCalibratePupil: Button
     private lateinit var btnResetPupilCalib: Button
     private lateinit var tvPupilCalibInfo: TextView
+    private lateinit var btnEyeRangeMin: Button
+    private lateinit var btnEyeRangeMax: Button
+    private lateinit var btnResetEyeRange: Button
+    private lateinit var tvEyeRangeInfo: TextView
     private lateinit var switchInvertEyeX: Switch
     private lateinit var switchInvertEyeY: Switch
     private lateinit var switchSyncEyes: Switch
@@ -114,6 +118,8 @@ class MainActivity : AppCompatActivity() {
 
     // ===== 瞳孔校准 =====
     private var lastBlendshapes: List<com.google.mediapipe.tasks.components.containers.Category>? = null
+    private var lastRawFaceData: Map<String, Float>? = null
+    private var lastStreamFaceData: Map<String, Float>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -145,6 +151,10 @@ class MainActivity : AppCompatActivity() {
         btnCalibratePupil = findViewById(R.id.btnCalibratePupil)
         btnResetPupilCalib = findViewById(R.id.btnResetPupilCalib)
         tvPupilCalibInfo = findViewById(R.id.tvPupilCalibInfo)
+        btnEyeRangeMin = findViewById(R.id.btnEyeRangeMin)
+        btnEyeRangeMax = findViewById(R.id.btnEyeRangeMax)
+        btnResetEyeRange = findViewById(R.id.btnResetEyeRange)
+        tvEyeRangeInfo = findViewById(R.id.tvEyeRangeInfo)
         switchInvertEyeX = findViewById(R.id.switchInvertEyeX)
         switchInvertEyeY = findViewById(R.id.switchInvertEyeY)
         switchSyncEyes = findViewById(R.id.switchSyncEyes)
@@ -208,6 +218,20 @@ class MainActivity : AppCompatActivity() {
             config = config.copy(eyeCalibration = EyeCalibrationOffset())
             tvPupilCalibInfo.text = "状态: 未校准"
             Toast.makeText(this, "瞳孔校准已重置", Toast.LENGTH_SHORT).show()
+        }
+
+        btnEyeRangeMin.setOnClickListener {
+            setEyeRangeMin()
+        }
+
+        btnEyeRangeMax.setOnClickListener {
+            setEyeRangeMax()
+        }
+
+        btnResetEyeRange.setOnClickListener {
+            config = config.copy(eyeRangeCalibration = EyeRangeCalibration())
+            updateCalibrationInfo()
+            Toast.makeText(this, "眼睛识别范围已重置", Toast.LENGTH_SHORT).show()
         }
 
         // 眼部X轴取负
@@ -319,6 +343,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateCalibrationInfo() {
         val eyeCal = config.eyeCalibration
+        val eyeRange = config.eyeRangeCalibration
         val mouthCal = config.mouthCalibration
 
         tvPupilCalibInfo.text = if (eyeCal.isCalibrated) {
@@ -329,6 +354,13 @@ class MainActivity : AppCompatActivity() {
             "状态: 已校准 | L偏移($lx,$ly) R偏移($rx,$ry)"
         } else {
             "状态: 未校准"
+        }
+
+        tvEyeRangeInfo.text = when {
+            eyeRange.isCalibrated -> "状态: 已设置最小值/最大值"
+            eyeRange.hasMin -> "状态: 已设置最小值，等待最大值"
+            eyeRange.hasMax -> "状态: 已设置最大值，等待最小值"
+            else -> "状态: 未设置"
         }
 
         tvMouthCalibInfo.text = if (mouthCal.isCalibrated) {
@@ -841,9 +873,14 @@ class MainActivity : AppCompatActivity() {
                     config.invertEyeX, config.invertEyeY,
                     config.syncEyes, config.sendMergedEyes
                 )
+                val streamFaceData = MediaPipeHelper.applyEyeRangeCalibration(
+                    faceData, config.eyeRangeCalibration
+                )
+                lastRawFaceData = faceData
+                lastStreamFaceData = streamFaceData
 
-                faceStreamer?.sendFaceData(faceData)
-                updateFaceStatus(faceData)
+                faceStreamer?.sendFaceData(streamFaceData)
+                updateFaceStatus(faceData, streamFaceData)
             }
         } else {
             updateStatus("未检测到面部")
@@ -990,6 +1027,34 @@ class MainActivity : AppCompatActivity() {
         updateCalibrationInfo()
     }
 
+    private fun setEyeRangeMin() {
+        val faceData = lastRawFaceData
+        if (faceData == null) {
+            Toast.makeText(this, "请先开启摄像头并检测到面部", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val values = MediaPipeHelper.captureEyeRangeValues(faceData)
+        val prev = config.eyeRangeCalibration
+        config = config.copy(eyeRangeCalibration = prev.copy(minValues = values))
+        updateCalibrationInfo()
+        Toast.makeText(this, "当前眼睛识别值已设为最小值", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun setEyeRangeMax() {
+        val faceData = lastRawFaceData
+        if (faceData == null) {
+            Toast.makeText(this, "请先开启摄像头并检测到面部", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val values = MediaPipeHelper.captureEyeRangeValues(faceData)
+        val prev = config.eyeRangeCalibration
+        config = config.copy(eyeRangeCalibration = prev.copy(maxValues = values))
+        updateCalibrationInfo()
+        Toast.makeText(this, "当前眼睛识别值已设为最大值", Toast.LENGTH_SHORT).show()
+    }
+
     private fun getBsMap(): Map<String, Float>? {
         val bs = lastBlendshapes ?: return null
         val map = mutableMapOf<String, Float>()
@@ -1049,14 +1114,15 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread { tvStatus.text = statusText }
     }
 
-    private fun updateFaceStatus(faceData: Map<String, Float>) {
+    private fun updateFaceStatus(faceData: Map<String, Float>, streamFaceData: Map<String, Float> = faceData) {
         runOnUiThread {
-            val mouth = faceData["v2/JawOpen"]?.let { String.format("%.2f", it) } ?: "-"
-            val eyeXValue = faceData["v2/EyesX"] ?: averageEyeValue(faceData, "X")
-            val eyeYValue = faceData["v2/EyesY"] ?: averageEyeValue(faceData, "Y")
+            val mouth = streamFaceData["v2/JawOpen"]?.let { String.format("%.2f", it) } ?: "-"
+            val eyeXValue = streamFaceData["v2/EyesX"] ?: averageEyeValue(streamFaceData, "X")
+            val eyeYValue = streamFaceData["v2/EyesY"] ?: averageEyeValue(streamFaceData, "Y")
             val eyeX = eyeXValue?.let { String.format("%.2f", it) } ?: "-"
             val eyeY = eyeYValue?.let { String.format("%.2f", it) } ?: "-"
             val eyeCalMark = if (config.eyeCalibration.isCalibrated) "瞳✓" else "瞳✗"
+            val eyeRangeMark = if (config.eyeRangeCalibration.isCalibrated) "幅✓" else "幅✗"
             val mouthCalMark = if (config.mouthCalibration.isCalibrated) "嘴✓" else "嘴✗"
             val mirrorMark = if (config.isMirrored) "镜" else ""
             val invertMark = when {
@@ -1067,16 +1133,20 @@ class MainActivity : AppCompatActivity() {
             }
             val syncMark = if (config.syncEyes) "同步" else ""
             val label = actualDelegateLabel.ifEmpty { "CPU" }
-            tvStatus.text = "[$label] FPS: ${currentFps.toInt()} | 嘴: $mouth $mouthCalMark | 眼: $eyeX,$eyeY $eyeCalMark $mirrorMark $invertMark $syncMark"
+            tvStatus.text = "[$label] FPS: ${currentFps.toInt()} | 嘴: $mouth $mouthCalMark | 眼: $eyeX,$eyeY $eyeCalMark $eyeRangeMark $mirrorMark $invertMark $syncMark"
 
             if (isCalibrationOpen) {
                 val eyeLX = faceData["v2/EyeLeftX"]?.let { String.format("%.3f", it) } ?: "-"
                 val eyeLY = faceData["v2/EyeLeftY"]?.let { String.format("%.3f", it) } ?: "-"
                 val eyeRX = faceData["v2/EyeRightX"]?.let { String.format("%.3f", it) } ?: "-"
                 val eyeRY = faceData["v2/EyeRightY"]?.let { String.format("%.3f", it) } ?: "-"
+                val streamLX = streamFaceData["v2/EyeLeftX"]?.let { String.format("%.3f", it) } ?: "-"
+                val streamLY = streamFaceData["v2/EyeLeftY"]?.let { String.format("%.3f", it) } ?: "-"
+                val streamRX = streamFaceData["v2/EyeRightX"]?.let { String.format("%.3f", it) } ?: "-"
+                val streamRY = streamFaceData["v2/EyeRightY"]?.let { String.format("%.3f", it) } ?: "-"
                 val jawOpen = faceData["v2/JawOpen"]?.let { String.format("%.3f", it) } ?: "-"
                 val mouthClose = faceData["v2/MouthClose"]?.let { String.format("%.3f", it) } ?: "-"
-                tvCalibRealtime.text = "左眼 X: $eyeLX  Y: $eyeLY\n右眼 X: $eyeRX  Y: $eyeRY\n合并 X: $eyeX  Y: $eyeY\n嘴部 JawOpen: $jawOpen  MouthClose: $mouthClose"
+                tvCalibRealtime.text = "原始 L: $eyeLX,$eyeLY  R: $eyeRX,$eyeRY\n推流 L: $streamLX,$streamLY  R: $streamRX,$streamRY\n合并推流 X: $eyeX  Y: $eyeY\n嘴部 JawOpen: $jawOpen  MouthClose: $mouthClose"
                 tvCalibStatus.text = "面部已检测，可进行校准"
             }
         }
