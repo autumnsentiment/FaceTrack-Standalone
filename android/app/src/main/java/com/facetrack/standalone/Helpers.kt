@@ -26,8 +26,8 @@ data class AppConfig(
     val isMirrored: Boolean = false,
     val invertEyeX: Boolean = false,
     val invertEyeY: Boolean = false,
-    val syncEyes: Boolean = false,
-    val sendMergedEyes: Boolean = true
+    val syncEyes: Boolean = true,
+    val sendMergedEyes: Boolean = false
 )
 
 data class EyeCalibrationOffset(
@@ -255,9 +255,11 @@ object MediaPipeHelper {
             result["v2/EyeSquintRight"] = result["v2/EyeSquintLeft"]!!
         }
 
-        // ===== 合并眼部视线 (VRChat 模型常用 EyesX/EyesY，始终发送确保双眼驱动) =====
-        result["v2/EyesX"] = ((result["v2/EyeLeftX"]!! + result["v2/EyeRightX"]!!) / 2f).coerceIn(-1f, 1f)
-        result["v2/EyesY"] = ((result["v2/EyeLeftY"]!! + result["v2/EyeRightY"]!!) / 2f).coerceIn(-1f, 1f)
+        // ===== 合并眼部视线 (部分模型会用合并值覆盖右眼，默认不发送) =====
+        if (sendMergedEyes) {
+            result["v2/EyesX"] = ((result["v2/EyeLeftX"]!! + result["v2/EyeRightX"]!!) / 2f).coerceIn(-1f, 1f)
+            result["v2/EyesY"] = ((result["v2/EyeLeftY"]!! + result["v2/EyeRightY"]!!) / 2f).coerceIn(-1f, 1f)
+        }
 
         // ===== 眉毛 =====
         result["v2/BrowLowererLeft"] = bs["browDownLeft"] ?: 0f

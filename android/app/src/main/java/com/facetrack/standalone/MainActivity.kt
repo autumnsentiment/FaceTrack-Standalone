@@ -149,6 +149,8 @@ class MainActivity : AppCompatActivity() {
         switchInvertEyeY = findViewById(R.id.switchInvertEyeY)
         switchSyncEyes = findViewById(R.id.switchSyncEyes)
         switchSendMergedEyes = findViewById(R.id.switchSendMergedEyes)
+        switchSyncEyes.isChecked = config.syncEyes
+        switchSendMergedEyes.isChecked = config.sendMergedEyes
         btnMouthClosed = findViewById(R.id.btnMouthClosed)
         btnMouthMaxOpen = findViewById(R.id.btnMouthMaxOpen)
         btnResetMouthCalib = findViewById(R.id.btnResetMouthCalib)
@@ -1050,8 +1052,10 @@ class MainActivity : AppCompatActivity() {
     private fun updateFaceStatus(faceData: Map<String, Float>) {
         runOnUiThread {
             val mouth = faceData["v2/JawOpen"]?.let { String.format("%.2f", it) } ?: "-"
-            val eyeX = faceData["v2/EyesX"]?.let { String.format("%.2f", it) } ?: "-"
-            val eyeY = faceData["v2/EyesY"]?.let { String.format("%.2f", it) } ?: "-"
+            val eyeXValue = faceData["v2/EyesX"] ?: averageEyeValue(faceData, "X")
+            val eyeYValue = faceData["v2/EyesY"] ?: averageEyeValue(faceData, "Y")
+            val eyeX = eyeXValue?.let { String.format("%.2f", it) } ?: "-"
+            val eyeY = eyeYValue?.let { String.format("%.2f", it) } ?: "-"
             val eyeCalMark = if (config.eyeCalibration.isCalibrated) "瞳✓" else "瞳✗"
             val mouthCalMark = if (config.mouthCalibration.isCalibrated) "嘴✓" else "嘴✗"
             val mirrorMark = if (config.isMirrored) "镜" else ""
@@ -1076,6 +1080,12 @@ class MainActivity : AppCompatActivity() {
                 tvCalibStatus.text = "面部已检测，可进行校准"
             }
         }
+    }
+
+    private fun averageEyeValue(faceData: Map<String, Float>, axis: String): Float? {
+        val left = faceData["v2/EyeLeft$axis"] ?: return null
+        val right = faceData["v2/EyeRight$axis"] ?: return null
+        return ((left + right) / 2f).coerceIn(-1f, 1f)
     }
 
     override fun onDestroy() {

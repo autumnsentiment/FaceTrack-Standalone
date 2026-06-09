@@ -26,6 +26,18 @@ android/app/build/**/*.apk
 # Release 目录 - 允许提交 APK
 !release/*.apk
 
+# 根目录构建产物
+.gradle/
+app/
+app-debug.apk
+build.gradle
+gradle.properties
+gradle/
+local.properties
+settings.gradle
+jzmq.dll
+libzmq-mt-4_3_6.dll
+
 # 大文件 - 可通过 SDK Manager 重新下载
 android/cmdline-tools/
 android/gradle/wrapper/gradle-wrapper.jar

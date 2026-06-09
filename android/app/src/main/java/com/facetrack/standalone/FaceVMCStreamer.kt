@@ -14,9 +14,9 @@ import java.net.InetAddress
  * 2. VMC (端口 39539): VMC 面部 blendshape
  *
  * VRCFT 参数地址映射:
- * - 默认使用 ft/f/ (float) 和 ft/b/ (binary) 前缀
+ * - 默认发送 direct /avatar/parameters/... 地址
  * - 支持 VRCFT 别名映射 (处理参数名差异)
- * - 支持 Binary 编码参数 (BCD 编码)
+ * - 支持从 PC 端加载 Binary 编码参数 (BCD 编码)
  */
 class FaceVMCStreamer(
     private val host: String,

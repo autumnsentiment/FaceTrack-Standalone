@@ -95,6 +95,29 @@ _EYE_COMBINE = {
 # 眉毛内侧上扬: browInnerUp 同时映射到左右
 _BROW_INNER_UP = "browInnerUp"
 
+# 嘴部 blendshape 名称集合 (用于独立平滑系数)
+_MOUTH_BLENDSHAPES = {
+    "jawOpen", "mouthClose", "mouthFunnel", "mouthPucker",
+    "mouthSmileLeft", "mouthSmileRight", "mouthFrownLeft", "mouthFrownRight",
+    "mouthDimpleLeft", "mouthDimpleRight", "mouthPressLeft", "mouthPressRight",
+    "mouthStretchLeft", "mouthStretchRight", "mouthLowerDownLeft", "mouthLowerDownRight",
+    "mouthUpperUpLeft", "mouthUpperUpRight", "mouthRollLower", "mouthRollUpper",
+    "mouthShrugLower", "mouthShrugUpper", "mouthLeft", "mouthRight",
+    "jawLeft", "jawRight", "tongueOut",
+}
+
+# 嘴部 VRCFT 参数名集合（跳过 OneEuro 二次滤波，降低延迟）
+_MOUTH_VRCFT_PARAMS = {
+    "v2/JawOpen", "v2/MouthClosed", "v2/LipFunnel", "v2/LipPucker",
+    "v2/MouthSmileLeft", "v2/MouthSmileRight", "v2/MouthFrownLeft", "v2/MouthFrownRight",
+    "v2/MouthDimpleLeft", "v2/MouthDimpleRight", "v2/MouthPressLeft", "v2/MouthPressRight",
+    "v2/MouthStretchLeft", "v2/MouthStretchRight",
+    "v2/MouthLowerDownLeft", "v2/MouthLowerDownRight",
+    "v2/MouthUpperUpLeft", "v2/MouthUpperUpRight",
+    "v2/MouthRaiserLower", "v2/MouthRaiserUpper",
+    "v2/TongueOut",
+}
+
 
 class OneEuroFilter1D:
     """1D OneEuro 滤波器 - 低频平滑，高频低延迟
@@ -429,15 +452,6 @@ class FaceLandmarkDetector:
         # blendshape 平滑 (参考 mediapipe-vt blendshape_smoothing)
         # 线性插值: smoothed = smoothed * strength + raw * (1 - strength)
         # 嘴部参数使用独立低平滑系数以降低延迟
-        _MOUTH_BLENDSHAPES = {
-            "jawOpen", "mouthClose", "mouthFunnel", "mouthPucker",
-            "mouthSmileLeft", "mouthSmileRight", "mouthFrownLeft", "mouthFrownRight",
-            "mouthDimpleLeft", "mouthDimpleRight", "mouthPressLeft", "mouthPressRight",
-            "mouthStretchLeft", "mouthStretchRight", "mouthLowerDownLeft", "mouthLowerDownRight",
-            "mouthUpperUpLeft", "mouthUpperUpRight", "mouthRollLower", "mouthRollUpper",
-            "mouthShrugLower", "mouthShrugUpper", "mouthLeft", "mouthRight",
-            "jawLeft", "jawRight", "tongueOut",
-        }
         for key in bs_dict:
             raw = bs_dict[key]
             # 嘴部参数使用独立低平滑系数
@@ -602,17 +616,7 @@ class FaceLandmarkDetector:
             "cheekPuff":           "v2/CheekPuffSuck",
             "tongueOut":           "v2/TongueOut",
         }
-        # 嘴部 VRCFT 参数名集合（跳过 OneEuro 二次滤波，降低延迟）
-        _MOUTH_VRCFT_PARAMS = {
-            "v2/JawOpen", "v2/MouthClosed", "v2/LipFunnel", "v2/LipPucker",
-            "v2/MouthSmileLeft", "v2/MouthSmileRight", "v2/MouthFrownLeft", "v2/MouthFrownRight",
-            "v2/MouthDimpleLeft", "v2/MouthDimpleRight", "v2/MouthPressLeft", "v2/MouthPressRight",
-            "v2/MouthStretchLeft", "v2/MouthStretchRight",
-            "v2/MouthLowerDownLeft", "v2/MouthLowerDownRight",
-            "v2/MouthUpperUpLeft", "v2/MouthUpperUpRight",
-            "v2/MouthRaiserLower", "v2/MouthRaiserUpper",
-            "v2/TongueOut",
-        }
+
         for mp_name, vrcft_name in direct_map.items():
             val = bs_dict.get(mp_name, 0.0)
             # 嘴部参数应用灵敏度
