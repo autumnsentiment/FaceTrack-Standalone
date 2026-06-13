@@ -1,0 +1,7 @@
+platform :ios, '15.0'
+
+target 'FaceTrackStandalone' do
+  use_frameworks!
+
+  pod 'MediaPipeTasksVision'
+end

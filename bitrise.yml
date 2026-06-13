@@ -1,0 +1,31 @@
+format_version: "13"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+project_type: ios
+
+workflows:
+  ios-ipa:
+    description: Build FaceTrackStandalone iOS IPA on a macOS Bitrise stack.
+    envs:
+      - EXPORT_METHOD: development
+      - TEAM_ID: ""
+    steps:
+      - git-clone@8: {}
+      - certificate-and-profile-installer@1: {}
+      - script@1:
+          title: Build IPA
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -euo pipefail
+                cd "$BITRISE_SOURCE_DIR/ios"
+                chmod +x scripts/build-ipa.sh
+                ./scripts/build-ipa.sh
+      - deploy-to-bitrise-io@2:
+          inputs:
+            - deploy_path: "$BITRISE_SOURCE_DIR/ios/build/export"
+
+app:
+  envs:
+    - BITRISE_PROJECT_PATH: ios/FaceTrackStandalone.xcworkspace
+    - BITRISE_SCHEME: FaceTrackStandalone
+    - BITRISE_EXPORT_METHOD: development

@@ -1,0 +1,33 @@
+{
+    "camera": {
+        "camera_id": 0,
+        "width": 640,
+        "height": 480,
+        "fps": 30,
+        "flip_horizontal": true
+    },
+    "face": {
+        "enabled": true,
+        "min_detection_confidence": 0.5,
+        "min_tracking_confidence": 0.5,
+        "min_face_presence_confidence": 0.5,
+        "smoothing": "one_euro",
+        "smoothing_factor": 0.3,
+        "one_euro_min_cutoff": 1.0,
+        "one_euro_beta": 0.007,
+        "blendshape_smoothing": 0.4,
+        "head_position_scale": 1.0,
+        "head_position_offset": [0, 0, 0],
+        "head_rotation_smoothing": 0.3
+    },
+    "streaming": {
+        "host": "127.0.0.1",
+        "osc_port": 9000,
+        "vmc_port": 39539,
+        "enabled": true
+    },
+    "display": {
+        "show_preview": true,
+        "window_name": "FaceTrack-Standalone"
+    }
+}

@@ -1,0 +1,45 @@
+# Android 构建输出
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/.idea/
+android/local.properties
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# APK (通过 Release 分发)
+# android/app/build/ 下的 APK 不提交，但 release/ 目录下的可以
+android/app/build/**/*.apk
+
+# Release 目录 - 允许提交 APK
+!release/*.apk
+
+# 根目录构建产物
+.gradle/
+app/
+app-debug.apk
+build.gradle
+gradle.properties
+gradle/
+local.properties
+settings.gradle
+jzmq.dll
+libzmq-mt-4_3_6.dll
+
+# 大文件 - 可通过 SDK Manager 重新下载
+android/cmdline-tools/
+android/gradle/wrapper/gradle-wrapper.jar
+FaceTrack-Android-v1.1.zip
+face_landmarker.task
