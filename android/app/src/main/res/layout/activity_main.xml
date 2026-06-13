@@ -339,6 +339,198 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="外接摄像头验证"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="6dp">
+
+            <Button
+                android:id="@+id/btnStartUvcValidation"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="启动三路验证"
+                android:textSize="12sp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnStopUvcValidation"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="停止验证"
+                android:textSize="12sp"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvUvcSummary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="状态: 未启动"
+            android:textColor="#FFAA00"
+            android:textSize="11sp"
+            android:layout_marginBottom="6dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="6dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="34dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="2dp">
+
+                <TextView
+                    android:layout_width="44dp"
+                    android:layout_height="wrap_content"
+                    android:text="左眼"
+                    android:textColor="#DDDDDD"
+                    android:textSize="11sp" />
+
+                <Spinner
+                    android:id="@+id/spinnerUvcLeftEye"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="34dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="2dp">
+
+                <TextView
+                    android:layout_width="44dp"
+                    android:layout_height="wrap_content"
+                    android:text="右眼"
+                    android:textColor="#DDDDDD"
+                    android:textSize="11sp" />
+
+                <Spinner
+                    android:id="@+id/spinnerUvcRightEye"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="34dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="44dp"
+                    android:layout_height="wrap_content"
+                    android:text="嘴部"
+                    android:textColor="#DDDDDD"
+                    android:textSize="11sp" />
+
+                <Spinner
+                    android:id="@+id/spinnerUvcMouth"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="138dp"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginEnd="4dp">
+
+                <com.serenegiant.widget.UVCCameraTextureView
+                    android:id="@+id/uvcPreviewLeftEye"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:background="#111111" />
+
+                <TextView
+                    android:id="@+id/tvUvcLeftEye"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="左眼: 未连接"
+                    android:textColor="#DDDDDD"
+                    android:textSize="10sp"
+                    android:paddingTop="2dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp">
+
+                <com.serenegiant.widget.UVCCameraTextureView
+                    android:id="@+id/uvcPreviewRightEye"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:background="#111111" />
+
+                <TextView
+                    android:id="@+id/tvUvcRightEye"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="右眼: 未连接"
+                    android:textColor="#DDDDDD"
+                    android:textSize="10sp"
+                    android:paddingTop="2dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="4dp">
+
+                <com.serenegiant.widget.UVCCameraTextureView
+                    android:id="@+id/uvcPreviewMouth"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:background="#111111" />
+
+                <TextView
+                    android:id="@+id/tvUvcMouth"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="嘴部: 未连接"
+                    android:textColor="#DDDDDD"
+                    android:textSize="10sp"
+                    android:paddingTop="2dp" />
+            </LinearLayout>
+        </LinearLayout>
+
         <!-- 启动推流按钮 -->
         <Button
             android:id="@+id/btnStartStop"

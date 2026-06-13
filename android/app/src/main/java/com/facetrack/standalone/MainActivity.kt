@@ -1,14 +1,20 @@
 package com.facetrack.standalone
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.ImageFormat
 import android.graphics.Paint
 import android.graphics.YuvImage
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.ImageButton
@@ -24,6 +30,7 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import com.serenegiant.widget.UVCCameraTextureView
 import com.google.mediapipe.framework.image.MediaImageBuilder
 import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.framework.image.BitmapImageBuilder
@@ -82,6 +89,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var seekBarMouthSensitivity: SeekBar
     private lateinit var tvMouthSensitivity: TextView
     private lateinit var switchMirror: Switch
+    private lateinit var btnStartUvcValidation: Button
+    private lateinit var btnStopUvcValidation: Button
+    private lateinit var tvUvcSummary: TextView
+    private lateinit var spinnerUvcLeftEye: Spinner
+    private lateinit var spinnerUvcRightEye: Spinner
+    private lateinit var spinnerUvcMouth: Spinner
+    private lateinit var uvcPreviewLeftEye: UVCCameraTextureView
+    private lateinit var uvcPreviewRightEye: UVCCameraTextureView
+    private lateinit var uvcPreviewMouth: UVCCameraTextureView
+    private lateinit var tvUvcLeftEye: TextView
+    private lateinit var tvUvcRightEye: TextView
+    private lateinit var tvUvcMouth: TextView
 
     // ===== 校准面板控件 =====
     private lateinit var btnOpenCalibration: ImageButton
@@ -113,13 +132,24 @@ class MainActivity : AppCompatActivity() {
     private var frameCount = 0L
     private var fpsTimestamp = System.nanoTime()
     private var currentFps = 0f
+    private var isUvcValidationRunning = false
     private var currentBackend: NativeHelper.AccelerationBackend = NativeHelper.AccelerationBackend.AUTO
     private var actualDelegateLabel: String = ""
+    private var cameraInputOptions: List<CameraInputDeviceOption> = emptyList()
+    private var isUpdatingCameraSpinners = false
 
     // ===== 瞳孔校准 =====
     private var lastBlendshapes: List<com.google.mediapipe.tasks.components.containers.Category>? = null
+    private var lastBlendshapeMap: Map<String, Float>? = null
     private var lastRawFaceData: Map<String, Float>? = null
     private var lastStreamFaceData: Map<String, Float>? = null
+    private var serviceStarted = false
+    private val trackingReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != FaceTrackingService.ACTION_STATUS) return
+            handleTrackingStatus(intent)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -143,6 +173,18 @@ class MainActivity : AppCompatActivity() {
         seekBarMouthSensitivity = findViewById(R.id.seekBarMouthSensitivity)
         tvMouthSensitivity = findViewById(R.id.tvMouthSensitivity)
         switchMirror = findViewById(R.id.switchMirror)
+        btnStartUvcValidation = findViewById(R.id.btnStartUvcValidation)
+        btnStopUvcValidation = findViewById(R.id.btnStopUvcValidation)
+        tvUvcSummary = findViewById(R.id.tvUvcSummary)
+        spinnerUvcLeftEye = findViewById(R.id.spinnerUvcLeftEye)
+        spinnerUvcRightEye = findViewById(R.id.spinnerUvcRightEye)
+        spinnerUvcMouth = findViewById(R.id.spinnerUvcMouth)
+        uvcPreviewLeftEye = findViewById(R.id.uvcPreviewLeftEye)
+        uvcPreviewRightEye = findViewById(R.id.uvcPreviewRightEye)
+        uvcPreviewMouth = findViewById(R.id.uvcPreviewMouth)
+        tvUvcLeftEye = findViewById(R.id.tvUvcLeftEye)
+        tvUvcRightEye = findViewById(R.id.tvUvcRightEye)
+        tvUvcMouth = findViewById(R.id.tvUvcMouth)
 
         btnOpenCalibration = findViewById(R.id.btnOpenCalibration)
         calibrationPanel = findViewById(R.id.calibrationPanel)
@@ -168,8 +210,99 @@ class MainActivity : AppCompatActivity() {
         tvCalibRealtime = findViewById(R.id.tvCalibRealtime)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
+        setupCameraBindingSpinners()
         setupUI()
         checkPermissions()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter(FaceTrackingService.ACTION_STATUS)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(trackingReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(trackingReceiver, filter)
+        }
+        FaceTrackingService.attachPreview(viewFinder)
+        attachUvcPreviews()
+    }
+
+    override fun onStop() {
+        FaceTrackingService.detachPreview(viewFinder)
+        detachUvcPreviews()
+        runCatching { unregisterReceiver(trackingReceiver) }
+        super.onStop()
+    }
+
+    private fun setupCameraBindingSpinners() {
+        setCameraBindingItems(spinnerUvcLeftEye, CameraInputRole.LEFT_EYE)
+        setCameraBindingItems(spinnerUvcRightEye, CameraInputRole.RIGHT_EYE)
+        setCameraBindingItems(spinnerUvcMouth, CameraInputRole.MOUTH)
+
+        spinnerUvcLeftEye.onItemSelectedListener = cameraBindingListener(CameraInputRole.LEFT_EYE)
+        spinnerUvcRightEye.onItemSelectedListener = cameraBindingListener(CameraInputRole.RIGHT_EYE)
+        spinnerUvcMouth.onItemSelectedListener = cameraBindingListener(CameraInputRole.MOUTH)
+    }
+
+    private fun cameraBindingListener(role: CameraInputRole): AdapterView.OnItemSelectedListener {
+        return object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (isUpdatingCameraSpinners) return
+                val key = cameraBindingKeyAt(position)
+                if (config.cameraInputBindings.keyFor(role) == key) return
+                if (key.isNotBlank() && key in config.cameraInputBindings.selectedKeys() - config.cameraInputBindings.keyFor(role)) {
+                    Toast.makeText(this@MainActivity, "该摄像头已绑定到其他部位", Toast.LENGTH_SHORT).show()
+                    updateCameraBindingSpinners()
+                    return
+                }
+                config = config.copy(cameraInputBindings = config.cameraInputBindings.withRole(role, key))
+                updateCameraBindingSpinners()
+                updateServiceConfig()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+    }
+
+    private fun updateCameraInputOptions(options: List<CameraInputDeviceOption>) {
+        val previousKeys = cameraInputOptions.map { it.bindingKey }
+        val newKeys = options.map { it.bindingKey }
+        if (previousKeys == newKeys) return
+        cameraInputOptions = options
+        updateCameraBindingSpinners()
+    }
+
+    private fun updateCameraBindingSpinners() {
+        isUpdatingCameraSpinners = true
+        setCameraBindingItems(spinnerUvcLeftEye, CameraInputRole.LEFT_EYE)
+        setCameraBindingItems(spinnerUvcRightEye, CameraInputRole.RIGHT_EYE)
+        setCameraBindingItems(spinnerUvcMouth, CameraInputRole.MOUTH)
+        isUpdatingCameraSpinners = false
+    }
+
+    private fun setCameraBindingItems(spinner: Spinner, role: CameraInputRole) {
+        val labels = mutableListOf("${role.label}: 自动分配")
+        labels.addAll(cameraInputOptions.map { "${role.label}: ${it.displayName}" })
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, labels).also {
+            it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        spinner.adapter = adapter
+        spinner.setSelection(cameraBindingIndex(config.cameraInputBindings.keyFor(role)), false)
+    }
+
+    private fun cameraBindingKeyAt(position: Int): String {
+        return if (position <= 0) {
+            CameraInputSources.AUTO_KEY
+        } else {
+            cameraInputOptions.getOrNull(position - 1)?.bindingKey ?: CameraInputSources.AUTO_KEY
+        }
+    }
+
+    private fun cameraBindingIndex(key: String): Int {
+        if (key.isBlank()) return 0
+        val index = cameraInputOptions.indexOfFirst { it.bindingKey == key }
+        return if (index >= 0) index + 1 else 0
     }
 
     private fun setupUI() {
@@ -185,17 +318,17 @@ class MainActivity : AppCompatActivity() {
 
         // 摄像头开关
         btnCamera.setOnClickListener {
-            if (isCameraStarted) stopCamera() else startCameraWithCheck()
+            if (isCameraStarted) stopServiceCamera() else startServiceCameraWithCheck()
         }
 
         // 切换前后摄像头
         btnSwitchCamera.setOnClickListener {
-            switchCamera()
+            sendServiceAction(FaceTrackingService.ACTION_SWITCH_CAMERA)
         }
 
         // 推流开关
         btnStartStop.setOnClickListener {
-            if (isRunning) stopTracking() else startTracking()
+            if (isRunning) stopServiceTracking() else startServiceTracking()
         }
 
         // 校准面板入口
@@ -217,6 +350,7 @@ class MainActivity : AppCompatActivity() {
         btnResetPupilCalib.setOnClickListener {
             config = config.copy(eyeCalibration = EyeCalibrationOffset())
             tvPupilCalibInfo.text = "状态: 未校准"
+            updateServiceConfig()
             Toast.makeText(this, "瞳孔校准已重置", Toast.LENGTH_SHORT).show()
         }
 
@@ -231,27 +365,32 @@ class MainActivity : AppCompatActivity() {
         btnResetEyeRange.setOnClickListener {
             config = config.copy(eyeRangeCalibration = EyeRangeCalibration())
             updateCalibrationInfo()
+            updateServiceConfig()
             Toast.makeText(this, "眼睛识别范围已重置", Toast.LENGTH_SHORT).show()
         }
 
         // 眼部X轴取负
         switchInvertEyeX.setOnCheckedChangeListener { _, isChecked ->
             config = config.copy(invertEyeX = isChecked)
+            updateServiceConfig()
         }
 
         // 眼部Y轴取负
         switchInvertEyeY.setOnCheckedChangeListener { _, isChecked ->
             config = config.copy(invertEyeY = isChecked)
+            updateServiceConfig()
         }
 
         // 双眼同步
         switchSyncEyes.setOnCheckedChangeListener { _, isChecked ->
             config = config.copy(syncEyes = isChecked)
+            updateServiceConfig()
         }
 
         // 发送合并眼部参数
         switchSendMergedEyes.setOnCheckedChangeListener { _, isChecked ->
             config = config.copy(sendMergedEyes = isChecked)
+            updateServiceConfig()
         }
 
         // 嘴部闭合校准
@@ -268,6 +407,7 @@ class MainActivity : AppCompatActivity() {
         btnResetMouthCalib.setOnClickListener {
             config = config.copy(mouthCalibration = MouthCalibrationOffset())
             tvMouthCalibInfo.text = "状态: 未校准"
+            updateServiceConfig()
             Toast.makeText(this, "嘴部校准已重置", Toast.LENGTH_SHORT).show()
         }
 
@@ -280,6 +420,7 @@ class MainActivity : AppCompatActivity() {
                 val sensitivity = (progress + 3) / 10f
                 tvEyeSensitivity.text = String.format("%.1f", sensitivity)
                 config = config.copy(eyeSensitivity = sensitivity)
+                updateServiceConfig()
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -291,6 +432,7 @@ class MainActivity : AppCompatActivity() {
                 val sensitivity = (progress + 3) / 10f
                 tvMouthSensitivity.text = String.format("%.1f", sensitivity)
                 config = config.copy(mouthSensitivity = sensitivity)
+                updateServiceConfig()
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -301,6 +443,15 @@ class MainActivity : AppCompatActivity() {
         switchMirror.setOnCheckedChangeListener { _, isChecked ->
             config = config.copy(isMirrored = isChecked)
             viewFinder.scaleX = if (isChecked) -1f else 1f
+            updateServiceConfig()
+        }
+
+        btnStartUvcValidation.setOnClickListener {
+            startUvcValidation()
+        }
+
+        btnStopUvcValidation.setOnClickListener {
+            stopUvcValidation()
         }
 
         // 进入时摄像头关闭，推流按钮禁用
@@ -455,6 +606,9 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
 
+                config = config.copy(backend = selected)
+                currentBackend = selected
+                updateServiceConfig()
                 switchBackend(selected)
             }
 
@@ -602,7 +756,7 @@ class MainActivity : AppCompatActivity() {
 
         // 恢复摄像头
         if (wasCameraStarted && isModelLoaded) {
-            startCamera()
+            startServiceCameraWithCheck()
         }
     }
 
@@ -639,12 +793,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkPermissions() {
-        if (checkSelfPermission(android.Manifest.permission.CAMERA) ==
+        val permissions = mutableListOf<String>()
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
+            permissions.add(android.Manifest.permission.CAMERA)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            permissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        if (permissions.isEmpty()) {
             initFaceLandmarker()
         } else {
-            requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 100)
+            requestPermissions(permissions.toTypedArray(), 100)
         }
     }
 
@@ -652,8 +817,8 @@ class MainActivity : AppCompatActivity() {
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 100 && grantResults.isNotEmpty() &&
-            grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (requestCode == 100 && checkSelfPermission(android.Manifest.permission.CAMERA) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
             initFaceLandmarker()
         } else {
@@ -675,6 +840,166 @@ class MainActivity : AppCompatActivity() {
         if (hasBackCamera) parts.add("后置")
         if (parts.isEmpty()) parts.add("无摄像头")
         return "可用: ${parts.joinToString("+")} | 点击左下角开启"
+    }
+
+    private fun startServiceCameraWithCheck() {
+        if (!isModelLoaded) {
+            Toast.makeText(this, "模型未加载", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 100)
+            return
+        }
+        readConfigFromUI()
+        startFaceTrackingService(FaceTrackingService.ACTION_START_CAMERA)
+    }
+
+    private fun startServiceTracking() {
+        if (!isModelLoaded) {
+            Toast.makeText(this, "模型未加载", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 100)
+            return
+        }
+        readConfigFromUI()
+        startFaceTrackingService(FaceTrackingService.ACTION_START_TRACKING)
+    }
+
+    private fun stopServiceTracking() {
+        sendServiceAction(FaceTrackingService.ACTION_STOP_TRACKING)
+    }
+
+    private fun stopServiceCamera() {
+        sendServiceAction(FaceTrackingService.ACTION_STOP_CAMERA)
+    }
+
+    private fun updateServiceConfig() {
+        if (serviceStarted || FaceTrackingService.isActive()) {
+            sendServiceAction(FaceTrackingService.ACTION_UPDATE_CONFIG)
+        }
+    }
+
+    private fun startUvcValidation() {
+        readConfigFromUI()
+        startFaceTrackingService(FaceTrackingService.ACTION_START_UVC_VALIDATION)
+        attachUvcPreviews()
+    }
+
+    private fun stopUvcValidation() {
+        sendServiceAction(FaceTrackingService.ACTION_STOP_UVC_VALIDATION)
+    }
+
+    private fun attachUvcPreviews() {
+        FaceTrackingService.attachUvcPreview(CameraInputRole.LEFT_EYE, uvcPreviewLeftEye)
+        FaceTrackingService.attachUvcPreview(CameraInputRole.RIGHT_EYE, uvcPreviewRightEye)
+        FaceTrackingService.attachUvcPreview(CameraInputRole.MOUTH, uvcPreviewMouth)
+    }
+
+    private fun detachUvcPreviews() {
+        FaceTrackingService.detachUvcPreview(CameraInputRole.LEFT_EYE)
+        FaceTrackingService.detachUvcPreview(CameraInputRole.RIGHT_EYE)
+        FaceTrackingService.detachUvcPreview(CameraInputRole.MOUTH)
+    }
+
+    private fun startFaceTrackingService(action: String) {
+        val intent = Intent(this, FaceTrackingService::class.java)
+            .setAction(action)
+            .putExtra(FaceTrackingService.EXTRA_CONFIG, config)
+        ContextCompat.startForegroundService(this, intent)
+        serviceStarted = true
+        FaceTrackingService.attachPreview(viewFinder)
+    }
+
+    private fun sendServiceAction(action: String) {
+        val intent = Intent(this, FaceTrackingService::class.java)
+            .setAction(action)
+            .putExtra(FaceTrackingService.EXTRA_CONFIG, config)
+        if (serviceStarted || FaceTrackingService.isActive()) {
+            startService(intent)
+        } else {
+            ContextCompat.startForegroundService(this, intent)
+            serviceStarted = true
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun handleTrackingStatus(intent: Intent) {
+        isRunning = intent.getBooleanExtra(FaceTrackingService.EXTRA_RUNNING, isRunning)
+        isCameraStarted = intent.getBooleanExtra(FaceTrackingService.EXTRA_CAMERA_STARTED, isCameraStarted)
+        faceDetected = intent.getBooleanExtra(FaceTrackingService.EXTRA_FACE_DETECTED, faceDetected)
+        currentFps = intent.getFloatExtra(FaceTrackingService.EXTRA_FPS, currentFps)
+        isFrontCamera = intent.getBooleanExtra(FaceTrackingService.EXTRA_FRONT_CAMERA, isFrontCamera)
+        isUvcValidationRunning = intent.getBooleanExtra(FaceTrackingService.EXTRA_UVC_RUNNING, isUvcValidationRunning)
+
+        btnCamera.setImageResource(
+            if (isCameraStarted) android.R.drawable.ic_menu_crop else android.R.drawable.ic_menu_camera
+        )
+        btnStartStop.isEnabled = isCameraStarted || isRunning
+        btnStartStop.text = if (isRunning) "停止推流" else "启动推流"
+        btnSwitchCamera.visibility = if (isCameraStarted && hasFrontCamera && hasBackCamera) View.VISIBLE else View.GONE
+        etOscHost.isEnabled = !isRunning
+        etOscPort.isEnabled = !isRunning
+        etVmcPort.isEnabled = !isRunning
+
+        val rawFaceData = intent.getSerializableExtra(FaceTrackingService.EXTRA_RAW_FACE_DATA) as? HashMap<String, Float>
+        val streamFaceData = intent.getSerializableExtra(FaceTrackingService.EXTRA_STREAM_FACE_DATA) as? HashMap<String, Float>
+        val blendshapeMap = intent.getSerializableExtra(FaceTrackingService.EXTRA_BLENDSHAPES) as? HashMap<String, Float>
+        val uvcStatuses = intent.getSerializableExtra(FaceTrackingService.EXTRA_UVC_STATUSES) as? ArrayList<CameraInputStatus>
+        val inputOptions = intent.getSerializableExtra(FaceTrackingService.EXTRA_CAMERA_INPUT_OPTIONS) as? ArrayList<CameraInputDeviceOption>
+        val externalCameraIds = intent.getStringArrayListExtra(FaceTrackingService.EXTRA_EXTERNAL_CAMERA_IDS).orEmpty()
+        updateCameraInputOptions(inputOptions.orEmpty())
+        updateUvcStatus(uvcStatuses.orEmpty(), externalCameraIds)
+
+        if (blendshapeMap != null) {
+            lastBlendshapeMap = blendshapeMap
+        }
+        if (rawFaceData != null && streamFaceData != null) {
+            lastRawFaceData = rawFaceData
+            lastStreamFaceData = streamFaceData
+            updateFaceStatus(rawFaceData, streamFaceData)
+        } else {
+            intent.getStringExtra(FaceTrackingService.EXTRA_STATUS)?.let { updateStatus(it) }
+        }
+    }
+
+    private fun updateUvcStatus(statuses: List<CameraInputStatus>, externalCameraIds: List<String>) {
+        btnStartUvcValidation.isEnabled = !isUvcValidationRunning
+        btnStopUvcValidation.isEnabled = isUvcValidationRunning
+        val connected = statuses.count { it.connected || it.camera2Id.isNotEmpty() }
+        val extText = if (externalCameraIds.isNotEmpty()) {
+            " | Camera2 external: ${externalCameraIds.joinToString(",")}"
+        } else {
+            " | Camera2 external: 无"
+        }
+        tvUvcSummary.text = "状态: ${if (isUvcValidationRunning) "验证中" else "未启动"} | $connected/3 路$extText"
+        tvUvcLeftEye.text = formatUvcStatus(CameraInputRole.LEFT_EYE, statuses)
+        tvUvcRightEye.text = formatUvcStatus(CameraInputRole.RIGHT_EYE, statuses)
+        tvUvcMouth.text = formatUvcStatus(CameraInputRole.MOUTH, statuses)
+    }
+
+    private fun formatUvcStatus(role: CameraInputRole, statuses: List<CameraInputStatus>): String {
+        val status = statuses.firstOrNull { it.role == role } ?: CameraInputStatus(role)
+        val conn = when {
+            status.previewing -> "预览中"
+            status.connected && status.permissionGranted -> "已授权"
+            status.connected -> "待授权"
+            status.camera2Id.isNotEmpty() -> "Camera2:${status.camera2Id}"
+            else -> "未连接"
+        }
+        val size = if (status.width > 0 && status.height > 0) "${status.width}x${status.height}" else "-"
+        val source = when {
+            status.camera2Id.isNotEmpty() -> "${status.sourceType} #${status.camera2Id}"
+            status.sourceType.isNotBlank() -> status.sourceType
+            else -> "UVC"
+        }
+        return "${role.label}: $conn | $source\n${status.deviceName} | ${String.format("%.1f", status.fps)}fps | $size | drop ${status.droppedFrames}"
     }
 
     private fun startCameraWithCheck() {
@@ -994,15 +1319,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun calibratePupil() {
-        val bs = lastBlendshapes
-        if (bs == null) {
+        val bsMap = getBsMap()
+        if (bsMap == null) {
             Toast.makeText(this, "请先开启摄像头并检测到面部", Toast.LENGTH_SHORT).show()
             return
-        }
-
-        val bsMap = mutableMapOf<String, Float>()
-        for (category in bs) {
-            bsMap[category.categoryName()] = category.score()
         }
 
         val calibration = EyeCalibrationOffset(
@@ -1017,6 +1337,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         config = config.copy(eyeCalibration = calibration)
+        updateServiceConfig()
 
         val leftX = String.format("%.3f", (calibration.lookOutLeft - calibration.lookInLeft))
         val leftY = String.format("%.3f", (calibration.lookUpLeft - calibration.lookDownLeft))
@@ -1038,6 +1359,7 @@ class MainActivity : AppCompatActivity() {
         val prev = config.eyeRangeCalibration
         config = config.copy(eyeRangeCalibration = prev.copy(minValues = values))
         updateCalibrationInfo()
+        updateServiceConfig()
         Toast.makeText(this, "当前眼睛识别值已设为最小值", Toast.LENGTH_SHORT).show()
     }
 
@@ -1052,10 +1374,12 @@ class MainActivity : AppCompatActivity() {
         val prev = config.eyeRangeCalibration
         config = config.copy(eyeRangeCalibration = prev.copy(maxValues = values))
         updateCalibrationInfo()
+        updateServiceConfig()
         Toast.makeText(this, "当前眼睛识别值已设为最大值", Toast.LENGTH_SHORT).show()
     }
 
     private fun getBsMap(): Map<String, Float>? {
+        lastBlendshapeMap?.let { return it }
         val bs = lastBlendshapes ?: return null
         val map = mutableMapOf<String, Float>()
         for (category in bs) {
@@ -1081,6 +1405,7 @@ class MainActivity : AppCompatActivity() {
                 closedMouthClose = mouthClose
             )
         )
+        updateServiceConfig()
 
         Log.d(TAG, "Mouth closed calibrated: jawOpen=$jawOpen, mouthClose=$mouthClose")
         Toast.makeText(this, "嘴部闭合校准完成 (jawOpen=${String.format("%.3f", jawOpen)})", Toast.LENGTH_SHORT).show()
@@ -1104,6 +1429,7 @@ class MainActivity : AppCompatActivity() {
                 maxMouthClose = mouthClose
             )
         )
+        updateServiceConfig()
 
         Log.d(TAG, "Mouth max calibrated: jawOpen=$jawOpen, mouthClose=$mouthClose")
         Toast.makeText(this, "嘴部最大值校准完成 (jawOpen=${String.format("%.3f", jawOpen)})", Toast.LENGTH_SHORT).show()

@@ -158,7 +158,9 @@ class FaceVMCStreamer(
 
         val directEyeParams = setOf(
             "v2/EyesX", "v2/EyesY",
-            "v2/EyeLeftX", "v2/EyeLeftY", "v2/EyeRightX", "v2/EyeRightY"
+            "v2/EyeLeftX", "v2/EyeLeftY", "v2/EyeRightX", "v2/EyeRightY",
+            "v2/EyeLidLeft", "v2/EyeLidRight",
+            "v2/EyeSquintLeft", "v2/EyeSquintRight"
         )
         if (vrcftName in directEyeParams) {
             // 添加不带 v2/ 前缀的地址 (VRChat 常用格式)
@@ -174,7 +176,27 @@ class FaceVMCStreamer(
                 "v2/EyeLeftX" to listOf("/avatar/parameters/LeftEyeX"),
                 "v2/EyeLeftY" to listOf("/avatar/parameters/LeftEyeY"),
                 "v2/EyeRightX" to listOf("/avatar/parameters/RightEyeX"),
-                "v2/EyeRightY" to listOf("/avatar/parameters/RightEyeY")
+                "v2/EyeRightY" to listOf("/avatar/parameters/RightEyeY"),
+                "v2/EyeLidLeft" to listOf(
+                    "/avatar/parameters/LeftEyeLid",
+                    "/avatar/parameters/EyeBlinkLeft",
+                    "/avatar/parameters/LeftEyeBlink",
+                    "/avatar/parameters/BlinkLeft"
+                ),
+                "v2/EyeLidRight" to listOf(
+                    "/avatar/parameters/RightEyeLid",
+                    "/avatar/parameters/EyeBlinkRight",
+                    "/avatar/parameters/RightEyeBlink",
+                    "/avatar/parameters/BlinkRight"
+                ),
+                "v2/EyeSquintLeft" to listOf(
+                    "/avatar/parameters/LeftEyeSquint",
+                    "/avatar/parameters/SquintLeft"
+                ),
+                "v2/EyeSquintRight" to listOf(
+                    "/avatar/parameters/RightEyeSquint",
+                    "/avatar/parameters/SquintRight"
+                )
             )
             eyeAliases[vrcftName]?.forEach { alias ->
                 if (alias !in addresses) {

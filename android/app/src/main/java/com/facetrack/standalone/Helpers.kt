@@ -6,6 +6,7 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import com.google.mediapipe.tasks.components.containers.Category
 import java.io.File
 import java.io.FileOutputStream
+import java.io.Serializable
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -28,8 +29,10 @@ data class AppConfig(
     val invertEyeX: Boolean = false,
     val invertEyeY: Boolean = false,
     val syncEyes: Boolean = true,
-    val sendMergedEyes: Boolean = false
-)
+    val sendMergedEyes: Boolean = false,
+    val cameraInputBindings: CameraInputBindingConfig = CameraInputBindingConfig(),
+    val backend: NativeHelper.AccelerationBackend = NativeHelper.AccelerationBackend.AUTO
+) : Serializable
 
 data class EyeCalibrationOffset(
     val lookOutLeft: Float = 0f,
@@ -40,7 +43,7 @@ data class EyeCalibrationOffset(
     val lookDownLeft: Float = 0f,
     val lookUpRight: Float = 0f,
     val lookDownRight: Float = 0f
-) {
+) : Serializable {
     val isCalibrated: Boolean get() = lookOutLeft != 0f || lookInLeft != 0f ||
         lookInRight != 0f || lookOutRight != 0f ||
         lookUpLeft != 0f || lookDownLeft != 0f ||
@@ -52,14 +55,14 @@ data class MouthCalibrationOffset(
     val closedMouthClose: Float = 0f,
     val maxJawOpen: Float = 1f,
     val maxMouthClose: Float = 0f
-) {
+) : Serializable {
     val isCalibrated: Boolean get() = closedJawOpen != 0f || maxJawOpen != 1f
 }
 
 data class EyeRangeCalibration(
     val minValues: Map<String, Float> = emptyMap(),
     val maxValues: Map<String, Float> = emptyMap()
-) {
+) : Serializable {
     val hasMin: Boolean get() = minValues.isNotEmpty()
     val hasMax: Boolean get() = maxValues.isNotEmpty()
     val isCalibrated: Boolean get() = hasMin && hasMax
@@ -266,10 +269,7 @@ object MediaPipeHelper {
 
         // ===== 双眼同步 (右眼复制左眼数据，解决模型仅左眼运动问题) =====
         if (syncEyes) {
-            result["v2/EyeRightX"] = result["v2/EyeLeftX"]!!
-            result["v2/EyeRightY"] = result["v2/EyeLeftY"]!!
-            result["v2/EyeLidRight"] = result["v2/EyeLidLeft"]!!
-            result["v2/EyeSquintRight"] = result["v2/EyeSquintLeft"]!!
+            synchronizeEyes(result)
         }
 
         // ===== 合并眼部视线 (部分模型会用合并值覆盖右眼，默认不发送) =====
@@ -311,6 +311,27 @@ object MediaPipeHelper {
         result["LipTrackingActive"] = 1.0f
 
         return result
+    }
+
+    fun synchronizeEyes(faceData: MutableMap<String, Float>) {
+        faceData["v2/EyeLeftX"]?.let { faceData["v2/EyeRightX"] = it }
+        faceData["v2/EyeLeftY"]?.let { faceData["v2/EyeRightY"] = it }
+
+        val leftLid = faceData["v2/EyeLidLeft"]
+        val rightLid = faceData["v2/EyeLidRight"]
+        if (leftLid != null && rightLid != null) {
+            val closedValue = kotlin.math.min(leftLid, rightLid).coerceIn(0f, 1f)
+            faceData["v2/EyeLidLeft"] = closedValue
+            faceData["v2/EyeLidRight"] = closedValue
+        }
+
+        val leftSquint = faceData["v2/EyeSquintLeft"]
+        val rightSquint = faceData["v2/EyeSquintRight"]
+        if (leftSquint != null && rightSquint != null) {
+            val strongValue = kotlin.math.max(leftSquint, rightSquint).coerceIn(0f, 1f)
+            faceData["v2/EyeSquintLeft"] = strongValue
+            faceData["v2/EyeSquintRight"] = strongValue
+        }
     }
 
     fun captureEyeRangeValues(faceData: Map<String, Float>): Map<String, Float> {

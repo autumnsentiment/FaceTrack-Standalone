@@ -88,6 +88,9 @@ dependencies {
     implementation "androidx.camera:camera-lifecycle:${camerax_version}"
     implementation "androidx.camera:camera-view:${camerax_version}"
 
+    // USB UVC external cameras for Quest/Pico capture validation
+    implementation 'com.herohan:UVCAndroid:1.0.12'
+
     // 协程
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
 }
