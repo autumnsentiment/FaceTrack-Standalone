@@ -77,6 +77,6 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FaceTrackStandalone-iOS-${{ inputs.export_method }}
+          name: FaceTrackStandalone-iOS-${{ github.event.inputs.export_method || 'unsigned' }}
           path: ios/build/export/*.ipa
           if-no-files-found: error
