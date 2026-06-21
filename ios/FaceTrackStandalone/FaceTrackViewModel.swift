@@ -17,7 +17,7 @@ final class FaceTrackViewModel: ObservableObject {
     @Published var lastStreamFaceData: [String: Float] = [:]
     @Published var lastBlendshapes: [String: Float] = [:]
     @Published var backendLabel = "CPU"
-    @Published var paramMapStatus = "Default OSC addresses"
+    @Published var paramMapStatus = ""
 
     let cameraService = CameraService()
 
@@ -26,11 +26,19 @@ final class FaceTrackViewModel: ObservableObject {
     private var frameCount = 0
     private var fpsStart = Date()
     private var modelLoaded = false
+    private var paramMapFloatCount = 0
+    private var paramMapBinaryCount = 0
 
     init() {
         config = ConfigStore.load()
+        paramMapStatus = L.text(.defaultOscAddresses, config.language)
         bindServices()
         loadModel()
+    }
+
+    func toggleLanguage() {
+        config.language = config.language.toggled
+        refreshLocalizedState()
     }
 
     func loadModel() {
@@ -100,10 +108,12 @@ final class FaceTrackViewModel: ObservableObject {
             let (floatMap, binaryMap) = await ParamMapLoader.fetch(host: config.host)
             streamer.updateParamMap(floatMap: floatMap, binaryMap: binaryMap)
             await MainActor.run {
-                if floatMap.isEmpty {
-                    paramMapStatus = "Default OSC addresses"
+                paramMapFloatCount = floatMap.count
+                paramMapBinaryCount = binaryMap.count
+                if floatMap.isEmpty && binaryMap.isEmpty {
+                    paramMapStatus = L.text(.defaultOscAddresses, config.language)
                 } else {
-                    paramMapStatus = "Loaded \(floatMap.count) float, \(binaryMap.count) binary groups"
+                    paramMapStatus = L.format(.loadedParamMap, config.language, floatMap.count, binaryMap.count)
                 }
             }
         }
@@ -244,5 +254,13 @@ final class FaceTrackViewModel: ObservableObject {
         fps = Int(Double(frameCount) / elapsed)
         frameCount = 0
         fpsStart = Date()
+    }
+
+    private func refreshLocalizedState() {
+        if paramMapFloatCount > 0 || paramMapBinaryCount > 0 {
+            paramMapStatus = L.format(.loadedParamMap, config.language, paramMapFloatCount, paramMapBinaryCount)
+        } else {
+            paramMapStatus = L.text(.defaultOscAddresses, config.language)
+        }
     }
 }

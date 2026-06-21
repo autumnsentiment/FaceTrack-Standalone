@@ -3,6 +3,8 @@ import SwiftUI
 struct SettingsPanel: View {
     @EnvironmentObject private var viewModel: FaceTrackViewModel
 
+    private var language: AppLanguage { viewModel.config.language }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -23,7 +25,7 @@ struct SettingsPanel: View {
 
     private var header: some View {
         HStack {
-            Label("Settings", systemImage: "slider.horizontal.3")
+            Label(L.text(.settings, language), systemImage: "slider.horizontal.3")
                 .font(.headline)
             Spacer()
             Button {
@@ -38,9 +40,9 @@ struct SettingsPanel: View {
 
     private var networkSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Network")
+            Text(L.text(.network, language))
                 .font(.subheadline.weight(.semibold))
-            TextField("OSC host", text: binding(\.host))
+            TextField(L.text(.oscHost, language), text: binding(\.host))
                 .textInputAutocapitalization(.never)
                 .disableAutocorrection(true)
                 .textFieldStyle(.roundedBorder)
@@ -56,33 +58,33 @@ struct SettingsPanel: View {
 
     private var sensitivitySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Sensitivity")
+            Text(L.text(.sensitivity, language))
                 .font(.subheadline.weight(.semibold))
-            SliderRow(title: "Eye", value: $viewModel.config.eyeSensitivity)
-            SliderRow(title: "Mouth", value: $viewModel.config.mouthSensitivity)
+            SliderRow(title: L.text(.eye, language), value: $viewModel.config.eyeSensitivity)
+            SliderRow(title: L.text(.mouth, language), value: $viewModel.config.mouthSensitivity)
         }
     }
 
     private var togglesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Tracking")
+            Text(L.text(.tracking, language))
                 .font(.subheadline.weight(.semibold))
-            Toggle("Mirror preview/inference", isOn: $viewModel.config.isMirrored)
-            Toggle("Invert eye X", isOn: $viewModel.config.invertEyeX)
-            Toggle("Invert eye Y", isOn: $viewModel.config.invertEyeY)
-            Toggle("Sync eyes", isOn: $viewModel.config.syncEyes)
-            Toggle("Send merged eyes", isOn: $viewModel.config.sendMergedEyes)
+            Toggle(L.text(.mirrorPreviewInference, language), isOn: $viewModel.config.isMirrored)
+            Toggle(L.text(.invertEyeX, language), isOn: $viewModel.config.invertEyeX)
+            Toggle(L.text(.invertEyeY, language), isOn: $viewModel.config.invertEyeY)
+            Toggle(L.text(.syncEyes, language), isOn: $viewModel.config.syncEyes)
+            Toggle(L.text(.sendMergedEyes, language), isOn: $viewModel.config.sendMergedEyes)
         }
         .toggleStyle(.switch)
     }
 
     private var backendSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Backend")
+            Text(L.text(.backend, language))
                 .font(.subheadline.weight(.semibold))
             HStack {
                 Image(systemName: "cpu")
-                Text("MediaPipe Tasks Vision: CPU")
+                Text(L.text(.backendCpu, language))
                 Spacer()
             }
             .font(.footnote)

@@ -3,6 +3,8 @@ import SwiftUI
 struct CalibrationPanel: View {
     @EnvironmentObject private var viewModel: FaceTrackViewModel
 
+    private var language: AppLanguage { viewModel.config.language }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -23,7 +25,7 @@ struct CalibrationPanel: View {
 
     private var header: some View {
         HStack {
-            Label("Calibration", systemImage: "scope")
+            Label(L.text(.calibration, language), systemImage: "scope")
                 .font(.headline)
             Spacer()
             Button {
@@ -37,25 +39,25 @@ struct CalibrationPanel: View {
     }
 
     private var pupilSection: some View {
-        CalibrationSection(title: "Pupil", status: viewModel.config.eyeCalibration.isCalibrated ? "Calibrated" : "Not calibrated") {
-            ActionButton(title: "Center", systemName: "plus.viewfinder") {
+        CalibrationSection(title: L.text(.pupil, language), status: viewModel.config.eyeCalibration.isCalibrated ? L.text(.calibrated, language) : L.text(.notCalibrated, language)) {
+            ActionButton(title: L.text(.center, language), systemName: "plus.viewfinder") {
                 viewModel.calibratePupil()
             }
-            ActionButton(title: "Reset", systemName: "arrow.counterclockwise") {
+            ActionButton(title: L.text(.reset, language), systemName: "arrow.counterclockwise") {
                 viewModel.resetPupilCalibration()
             }
         }
     }
 
     private var eyeRangeSection: some View {
-        CalibrationSection(title: "Eye Range", status: eyeRangeStatus) {
-            ActionButton(title: "Min", systemName: "arrow.down.left.and.arrow.up.right") {
+        CalibrationSection(title: L.text(.eyeRange, language), status: eyeRangeStatus) {
+            ActionButton(title: L.text(.min, language), systemName: "arrow.down.left.and.arrow.up.right") {
                 viewModel.setEyeRangeMin()
             }
-            ActionButton(title: "Max", systemName: "arrow.up.right.and.arrow.down.left") {
+            ActionButton(title: L.text(.max, language), systemName: "arrow.up.right.and.arrow.down.left") {
                 viewModel.setEyeRangeMax()
             }
-            ActionButton(title: "Reset", systemName: "arrow.counterclockwise") {
+            ActionButton(title: L.text(.reset, language), systemName: "arrow.counterclockwise") {
                 viewModel.resetEyeRange()
             }
         }
@@ -63,21 +65,21 @@ struct CalibrationPanel: View {
 
     private var eyeRangeStatus: String {
         let range = viewModel.config.eyeRangeCalibration
-        if range.isCalibrated { return "Min and max set" }
-        if range.hasMin { return "Min set" }
-        if range.hasMax { return "Max set" }
-        return "Not set"
+        if range.isCalibrated { return L.text(.rangeMinMaxSet, language) }
+        if range.hasMin { return L.text(.rangeMinSet, language) }
+        if range.hasMax { return L.text(.rangeMaxSet, language) }
+        return L.text(.rangeNotSet, language)
     }
 
     private var mouthSection: some View {
-        CalibrationSection(title: "Mouth", status: viewModel.config.mouthCalibration.isCalibrated ? "Calibrated" : "Not calibrated") {
-            ActionButton(title: "Closed", systemName: "mouth") {
+        CalibrationSection(title: L.text(.mouth, language), status: viewModel.config.mouthCalibration.isCalibrated ? L.text(.calibrated, language) : L.text(.notCalibrated, language)) {
+            ActionButton(title: L.text(.closed, language), systemName: "mouth") {
                 viewModel.calibrateMouthClosed()
             }
-            ActionButton(title: "Open", systemName: "mouth.fill") {
+            ActionButton(title: L.text(.open, language), systemName: "mouth.fill") {
                 viewModel.calibrateMouthMaxOpen()
             }
-            ActionButton(title: "Reset", systemName: "arrow.counterclockwise") {
+            ActionButton(title: L.text(.reset, language), systemName: "arrow.counterclockwise") {
                 viewModel.resetMouthCalibration()
             }
         }
@@ -85,7 +87,7 @@ struct CalibrationPanel: View {
 
     private var realtimeSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Realtime")
+            Text(L.text(.realtime, language))
                 .font(.subheadline.weight(.semibold))
             Text(realtimeText)
                 .font(.system(size: 12, design: .monospaced))
@@ -100,9 +102,9 @@ struct CalibrationPanel: View {
         let raw = viewModel.lastRawFaceData
         let stream = viewModel.lastStreamFaceData
         return [
-            "Raw L \(format(raw["v2/EyeLeftX"])),\(format(raw["v2/EyeLeftY"])) R \(format(raw["v2/EyeRightX"])),\(format(raw["v2/EyeRightY"]))",
-            "Out L \(format(stream["v2/EyeLeftX"])),\(format(stream["v2/EyeLeftY"])) R \(format(stream["v2/EyeRightX"])),\(format(stream["v2/EyeRightY"]))",
-            "Merged \(format(stream["v2/EyesX"])),\(format(stream["v2/EyesY"])) Jaw \(format(stream["v2/JawOpen"]))"
+            "\(L.text(.raw, language)) L \(format(raw["v2/EyeLeftX"])),\(format(raw["v2/EyeLeftY"])) R \(format(raw["v2/EyeRightX"])),\(format(raw["v2/EyeRightY"]))",
+            "\(L.text(.output, language)) L \(format(stream["v2/EyeLeftX"])),\(format(stream["v2/EyeLeftY"])) R \(format(stream["v2/EyeRightX"])),\(format(stream["v2/EyeRightY"]))",
+            "\(L.text(.merged, language)) \(format(stream["v2/EyesX"])),\(format(stream["v2/EyesY"])) \(L.text(.jaw, language)) \(format(stream["v2/JawOpen"]))"
         ].joined(separator: "\n")
     }
 

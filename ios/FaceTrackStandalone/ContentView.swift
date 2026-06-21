@@ -46,6 +46,18 @@ struct ContentView: View {
                 .padding(.vertical, 4)
                 .background(.thinMaterial)
                 .clipShape(Capsule())
+            Button {
+                viewModel.toggleLanguage()
+            } label: {
+                Text(viewModel.config.language.buttonTitle)
+                    .font(.system(size: 12, weight: .bold))
+                    .frame(minWidth: 34)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+            }
+            .buttonStyle(.plain)
+            .background(.thinMaterial)
+            .clipShape(Capsule())
         }
         .padding(10)
         .background(.ultraThinMaterial)
@@ -58,7 +70,8 @@ struct ContentView: View {
         let eyeYValue = viewModel.lastStreamFaceData["v2/EyesY"] ?? averageEye(axis: "Y")
         let eyeX = eyeXValue.map { String(format: "%.2f", $0) } ?? "-"
         let eyeY = eyeYValue.map { String(format: "%.2f", $0) } ?? "-"
-        return "\(viewModel.status.text) | FPS \(viewModel.fps) | Mouth \(mouth) | Eye \(eyeX),\(eyeY)"
+        let language = viewModel.config.language
+        return "\(viewModel.status.text(language: language)) | \(L.text(.fps, language)) \(viewModel.fps) | \(L.text(.mouth, language)) \(mouth) | \(L.text(.eye, language)) \(eyeX),\(eyeY)"
     }
 
     private var controlBar: some View {
