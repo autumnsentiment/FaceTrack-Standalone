@@ -43,3 +43,4 @@ android/cmdline-tools/
 android/gradle/wrapper/gradle-wrapper.jar
 FaceTrack-Android-v1.1.zip
 face_landmarker.task
+!ios/FaceTrackStandalone/Resources/face_landmarker.task
