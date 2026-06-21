@@ -1,14 +1,20 @@
 name: iOS IPA
 
 on:
+  push:
+    branches:
+      - ios-fork
+    paths:
+      - ".github/workflows/ios-ipa.yml"
+      - "ios/**"
   workflow_dispatch:
     inputs:
       export_method:
-        description: Export method: development, ad-hoc, app-store, enterprise
+        description: "Export method: development, ad-hoc, app-store, enterprise"
         default: development
         required: true
       xcode_version:
-        description: Xcode version installed on runner
+        description: "Xcode version installed on runner"
         default: "15.4"
         required: true
 
@@ -31,7 +37,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -s "/Applications/Xcode_${{ inputs.xcode_version }}.app/Contents/Developer"
+        run: sudo xcode-select -s "/Applications/Xcode_${{ github.event.inputs.xcode_version || '15.4' }}.app/Contents/Developer"
 
       - name: Import signing certificate
         if: ${{ env.IOS_CERTIFICATE_BASE64 != '' && env.IOS_CERTIFICATE_PASSWORD != '' }}
@@ -62,7 +68,7 @@ jobs:
 
       - name: Build IPA
         env:
-          EXPORT_METHOD: ${{ inputs.export_method }}
+          EXPORT_METHOD: ${{ github.event.inputs.export_method || 'development' }}
           TEAM_ID: ${{ env.APPLE_TEAM_ID }}
         run: |
           chmod +x scripts/build-ipa.sh
